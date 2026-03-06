@@ -1,5 +1,3 @@
--- TODO enums: SLAYER, gem type, imbued effect
-
 local _imgui      = require("imgui")
 local ImGui       = _imgui.ImGui
 local views       = require("utilitybelt.views")
@@ -16,7 +14,7 @@ local additionalProperties = manifest._additionalProperties or {}
 ----------------------------------------------------------------------
 
 local UIState = {
-  mode               = "none",  -- "none" | "text" | "editor" | "rules"
+  mode               = "none",  -- "none" | "text" | "editor" | "rules" | "test"
   textLines          = nil,
   item               = nil,
   category           = nil,
@@ -29,6 +27,8 @@ local UIState = {
   editingProfileName = false,
   selectedProfile    = 1,
   importIdx          = 0,
+  editorReturnMode   = "none",
+  rulesReturnMode    = "none",
 }
 
 local activeProfiles = {}
@@ -36,6 +36,12 @@ local importList     = {}   -- { label, server, character }
 local inspectQueue   = {}
 local container      = {}
 AppraiseInfo         = {}
+
+-- cached combo label arrays (rebuilt only when underlying data changes)
+local cachedProfileLabels = {}
+local profileLabelsDirty  = true
+local cachedImportLabels  = {}
+local importLabelsDirty   = true
 
 local lootSaveFile   = "loot.json"
 local windowSaveFile = "window_config.json"
@@ -45,6 +51,7 @@ local windowStates   = {}
 local buildItem, saveLootProfile, loadLootProfile, populateImportList
 
 local hud = views.Huds.CreateHud("loot")
+hud.WindowSettings = _imgui.ImGuiWindowFlags.NoScrollbar
 
 ----------------------------------------------------------------------
 -- Value types
@@ -88,47 +95,48 @@ local function prettyPrintJSON(value, indent)
 end
 
 ----------------------------------------------------------------------
--- Loot evaluation  (plain data — activeProfiles is deserialized JSON)
+-- Loot evaluation
 ----------------------------------------------------------------------
 
 local function evalRule(rule, item)
   local val
   local op, rv = rule.op, rule.value
-  
+
   if rule.propType == "spells" then
     val = item.spells or ""
   elseif rule.propType == "wieldReq" then
     local suffixes = {"", "2", "3", "4"}
-    for _, s in ipairs(suffixes) do 
-      local rt = item.IntValues["WieldRequirements" .. s]
-      local st = item.IntValues["WieldSkilltype" .. s]  
+    for _, s in ipairs(suffixes) do
+      local rt   = item.IntValues["WieldRequirements" .. s]
+      local st   = item.IntValues["WieldSkilltype" .. s]
       local diff = item.IntValues["WieldDifficulty" .. s]
       if rt == rv.reqType and st == rv.skillType and diff then
         local d, target = tonumber(diff), tonumber(rv.difficulty)
-        if rule.op == ">=" then return d >= target end
-        if rule.op == "<=" then return d <= target end
-        if rule.op == "==" then return d == target end
-        if rule.op == ">"  then return d >  target end
-        if rule.op == "<"  then return d <  target end
+        if op == ">=" then return d >= target end
+        if op == "<=" then return d <= target end
+        if op == "==" then return d == target end
+        if op == ">"  then return d >  target end
+        if op == "<"  then return d <  target end
       end
     end
     return false
   else
     val = item[rule.propType] and item[rule.propType][rule.propKey]
   end
+
   if val == nil then return false end
 
   if rule.propType == "StringValues" or rule.propType == "spells" then
     local sv, rv2 = tostring(val), tostring(rv)
     if op == "Regex ->" then
-      return Regex.IsMatch(sv, rv2,RegexOptions.IgnoreCase)  -- user writes the regex, IsMatch already does substring
+      return Regex.IsMatch(sv, rv2, RegexOptions.IgnoreCase)
     else
-      return Regex.IsMatch(sv, "^" .. rv2 .. "$",RegexOptions.IgnoreCase)  -- == means full match
+      return Regex.IsMatch(sv, "^" .. rv2 .. "$", RegexOptions.IgnoreCase)
     end
   elseif rule.propType == "BoolValues" then
     return val == rv
   elseif op == "is one of" then
-    if #rv==0 then return true end
+    if #rv == 0 then return true end
     for _, accepted in ipairs(rv) do
       if tonumber(val) == tonumber(accepted) then return true end
     end
@@ -137,15 +145,14 @@ local function evalRule(rule, item)
     val, rv = tonumber(val), tonumber(rv)
     if not val or not rv then return false end
     local epsilon = 1e-6
-    if op == "==" or op == "AND" then return math.abs(val - rv) < epsilon end
+    if op == "OR"  then return bit.band(val, rv) > 0 end
+    if op == "AND" then return bit.band(val, rv) == rv end
+    if op == "==" then return math.abs(val - rv) < epsilon end
     if op == "!=" then return math.abs(val - rv) >= epsilon end
     if op == ">=" then return val >= rv - epsilon end
     if op == "<=" then return val <= rv + epsilon end
-    if op == ">"  then return val > rv + epsilon end
-    if op == "<"  then return val < rv - epsilon end
-    if op == "OR" then
-      return bit.band(tonumber(val) or 0, tonumber(rv) or 0) > 0
-    end
+    if op == ">"  then return val >  rv + epsilon end
+    if op == "<"  then return val <  rv - epsilon end
   end
   return false
 end
@@ -171,7 +178,7 @@ end
 -- Looting
 ----------------------------------------------------------------------
 
-local lootActionOptions = ActionOptions.new() 
+local lootActionOptions = ActionOptions.new()
 ---@diagnostic disable-next-line
 lootActionOptions.MaxRetryCount = 10
 lootActionOptions.SkipChecks    = true
@@ -206,6 +213,10 @@ local function processItem(itemData)
   end
 end
 
+----------------------------------------------------------------------
+-- Container handling
+----------------------------------------------------------------------
+
 game.World.OnContainerOpened.Add(function(msg)
   local c = msg.Container
   if c.ObjectClass ~= ObjectClass.Corpse
@@ -214,32 +225,28 @@ game.World.OnContainerOpened.Add(function(msg)
     return
   end
 
-  local cid = c.Id
-  if container[cid] ~= nil then
-    -- re-open: trim items already looted into inventory
+  if container[c.Id] ~= nil then
     local remaining = {}
-    for _, itemId in ipairs(container[cid]) do
+    for _, itemId in ipairs(container[c.Id]) do
       local wo = game.World.Get(itemId)
       if wo and wo.Container ~= game.CharacterId then
         table.insert(remaining, itemId)
       end
     end
-    container[cid] = remaining
+    container[c.Id] = remaining
   else
-    container[cid] = c.AllItemIds
-    game.World.Get(cid).OnDestroyed.Add(function()
-      container[cid] = nil
+    container[c.Id] = c.AllItemIds
+    game.World.Get(c.Id).OnDestroyed.Add(function()
+      container[c.Id] = nil
     end)
   end
 
-  for _, itemId in ipairs(container[cid]) do
+  for _, itemId in ipairs(container[c.Id]) do
     table.insert(inspectQueue, itemId)
     if AppraiseInfo[itemId] then
       processItem(AppraiseInfo[itemId])
     else
       await(game.Actions.ObjectAppraise(itemId))
-      buildItem(itemId)
-      -- buildItem → Item_SetAppraiseInfo hook → buildItem → processItem
     end
   end
 end)
@@ -249,12 +256,15 @@ end)
 ----------------------------------------------------------------------
 
 local function scanInventory()
-  for _, invItem in ipairs(game.Character.Equipment) do
-    print(tostring(invItem==nil))
-    await(game.Actions.ObjectAppraise(invItem.Id))
-    print(_)
+  if game.Character.InPortalSpace then
+    game.Character.OnPortalSpaceExited.Once(scanInventory)
+    return
   end
-  
+  for _, invItem in ipairs(game.Character.Equipment) do
+    if not invItem.HasAppraisalData then
+      await(game.Actions.ObjectAppraise(invItem.Id))
+    end
+  end
 end
 
 buildItem = function(e)
@@ -336,12 +346,12 @@ buildItem = function(e)
 
   local category = catDetect.detect(itemData)
 
+  -- build present/absent property lists for the editor
   local presentProps, absentProps = {}, {}
   for _, entry in ipairs(manifest.forCategory(category)) do
     if entry.widget == "wieldreq" then
-      local suffixes = {"", "2", "3", "4"}
       local anyFound = false
-      for _, s in ipairs(suffixes) do
+      for _, s in ipairs({"", "2", "3", "4"}) do
         local rt = itemData.IntValues and itemData.IntValues["WieldRequirements" .. s]
         if not rt then break end
         local st   = itemData.IntValues["WieldSkilltype" .. s] or 0
@@ -349,15 +359,11 @@ buildItem = function(e)
         table.insert(presentProps, { entry=entry, value={reqType=rt, skillType=st, difficulty=diff}, op=entry.ops[1] })
         anyFound = true
       end
-      if not anyFound then
-        table.insert(absentProps, entry)
-      end
+      if not anyFound then table.insert(absentProps, entry) end
     else
       local has, val = manifest.probeEntry(entry, itemData)
       if has then
-        if entry.widget == "enumset" and type(val) ~= "table" then
-          val = { val }
-        end
+        if entry.widget == "enumset" and type(val) ~= "table" then val = { val } end
         table.insert(presentProps, { entry=entry, value=val, op=entry.ops[1] })
       else
         table.insert(absentProps, entry)
@@ -372,9 +378,7 @@ buildItem = function(e)
     UIState.presentProps = presentProps
     UIState.absentProps  = absentProps
     UIState.addComboIdx  = 0
-    if UIState.mode ~= "test" then
-      UIState.mode = "text"
-    end
+    if UIState.mode ~= "test" then UIState.mode = "text" end
   end
 
   processItem(itemData)
@@ -391,7 +395,7 @@ game.OnRender3D.Add(function()
 end)
 
 ----------------------------------------------------------------------
--- Rule commit (new ruleset from editor → active profile)
+-- Rule commit (editor → active profile)
 ----------------------------------------------------------------------
 
 local function commitRuleToProfile(uiState)
@@ -431,7 +435,6 @@ function saveLootProfile()
   local character = game.Character.Weenie.Name
   data[server] = data[server] or {}
 
-  -- strip transient UI flags before serializing
   for _, profile in ipairs(activeProfiles) do
     for _, ruleSet in ipairs(profile.ruleSets) do
       ruleSet.editingName = nil
@@ -440,6 +443,7 @@ function saveLootProfile()
 
   data[server][character] = activeProfiles
   io.WriteText(lootSaveFile, prettyPrintJSON(data))
+  profileLabelsDirty = true
 end
 
 function loadLootProfile(server, character, merge)
@@ -454,10 +458,8 @@ function loadLootProfile(server, character, merge)
     return
   end
 
-  -- merge: append rulesets from imported profiles into matching local profiles
   local imported = data[server][character]
   for _, srcProfile in ipairs(imported) do
-    -- find matching local profile by name, or create it
     local dstProfile
     for _, p in ipairs(activeProfiles) do
       if p.name == srcProfile.name then dstProfile = p; break end
@@ -466,16 +468,10 @@ function loadLootProfile(server, character, merge)
       dstProfile = { name=srcProfile.name, active=false, ruleSets={} }
       table.insert(activeProfiles, dstProfile)
     end
-
-    -- append rulesets that don't already exist by name
     local existing = {}
-    for _, rs in ipairs(dstProfile.ruleSets) do
-      existing[rs.name] = true
-    end
+    for _, rs in ipairs(dstProfile.ruleSets) do existing[rs.name] = true end
     for _, rs in ipairs(srcProfile.ruleSets) do
-      if not existing[rs.name] then
-        table.insert(dstProfile.ruleSets, rs)
-      end
+      if not existing[rs.name] then table.insert(dstProfile.ruleSets, rs) end
     end
   end
 end
@@ -493,6 +489,7 @@ function populateImportList()
       })
     end
   end
+  importLabelsDirty = true
 end
 
 loadLootProfile()
@@ -535,97 +532,166 @@ end)
 loadWindowStates()
 
 ----------------------------------------------------------------------
--- ImGui helpers
+-- ImGui constants
 ----------------------------------------------------------------------
 
 local COL_OP     = 55
 local COL_VALUE  = 90
 local COL_REMOVE = 20
 
+-- cached colors (avoid Vector4.new allocations every frame)
+local C_BTN_DARK       = Vector4.new(0.1, 0.1, 0.1, 1.0)
+local C_BTN_DARK_HOV   = Vector4.new(0.2, 0.2, 0.2, 1.0)
+local C_TEXT_WHITE     = Vector4.new(1.0, 1.0, 1.0, 1.0)
+local C_BTN_GREEN      = Vector4.new(0.1, 0.6, 0.2, 0.5)
+local C_BTN_GREEN_HOV  = Vector4.new(0.2, 0.8, 0.2, 0.75)
+local C_BTN_YELLOW     = Vector4.new(0.6, 0.6, 0.3, 0.5)
+local C_BTN_YELLOW_HOV = Vector4.new(0.8, 0.8, 0.6, 0.8)
+local C_BTN_RED        = Vector4.new(0.6, 0.1, 0.1, 1.0)
+local C_BTN_RED_HOV    = Vector4.new(0.8, 0.2, 0.2, 1.0)
+local C_TEXT_GREEN     = Vector4.new(0.3, 1.0, 0.3, 1.0)
+local C_TEXT_RED       = Vector4.new(1.0, 0.4, 0.4, 1.0)
+local C_TEXT_ORANGE    = Vector4.new(1.0, 0.7, 0.3, 1.0)
+
+-- cached Vector2 zero-height button size (rebuilt in navButton since width varies)
+local V2_ZERO = Vector2.new(0, 0)
+
+-- wieldreq label arrays (static, no reason to rebuild every frame)
+local WIELD_REQ_LABELS = {"Skill","Base Skill","Attribute","Base Attribute","Vital","Base Vital","Level","Training","DONTUSE","DONTUSE","Creature Type","Heritage"}
+local ATTR_LABELS      = {"Strength","Endurance","Quickness","Coordination","Focus","Self"}
+local VITAL_LABELS     = {"Health","Mana","Stamina"}
+local HERITAGE_LABELS  = {"Aluvian","Gharu'ndim","Sho","Viamontian","Umbraen","Gearknight","Tumerok","Lugian","Empyrean","Penumbraen","Undead"}
+local TRAINING_LABELS  = {"Untrained","Trained","Specialized"}
+
+-- O(1) manifest lookup by propKey
+local byPropKey = {}
+for _, entry in ipairs(manifest.Manifest) do
+  if entry.propKey then byPropKey[entry.propKey] = entry end
+end
+
+----------------------------------------------------------------------
+-- Widget helpers
+----------------------------------------------------------------------
+
 local function navButton(label, dark)
   local w = ImGui.GetContentRegionMax().X / 3 - ImGui.GetStyle().ItemSpacing.X
   if dark then
-    ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        Vector4.new(0.1, 0.1, 0.1, 1.0))
-    ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, Vector4.new(0.2, 0.2, 0.2, 1.0))
-    ImGui.PushStyleColor(_imgui.ImGuiCol.Text,          Vector4.new(1.0, 1.0, 1.0, 1.0))
+    ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        C_BTN_DARK)
+    ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, C_BTN_DARK_HOV)
+    ImGui.PushStyleColor(_imgui.ImGuiCol.Text,          C_TEXT_WHITE)
   end
-  local clicked = ImGui.Button(label, Vector2.new(w, 0))
+  V2_ZERO.X = w
+  local clicked = ImGui.Button(label, V2_ZERO)
   if dark then ImGui.PopStyleColor(3) end
   return clicked
 end
 
+-- +AddRule / Rules / Test bar, shared by none and text modes
+local function renderTopNav()
+  if UIState.item and game.World.Selected and UIState.item.id == game.World.Selected.Id then
+    ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        C_BTN_GREEN)
+    ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, C_BTN_GREEN_HOV)
+    if navButton("+ Add Rule") then
+      UIState.editorReturnMode = UIState.mode
+      UIState.mode             = "editor"
+      UIState.propFilter       = ""
+      UIState.filteredAbsent   = nil
+      UIState.editingRuleSet   = nil
+    end
+    ImGui.PopStyleColor(2)
+  else
+    ImGui.BeginDisabled(true); navButton("+ Add Rule"); ImGui.EndDisabled()
+  end
+
+  ImGui.SameLine()
+  if navButton("Rules") then
+    UIState.rulesReturnMode = UIState.mode
+    UIState.mode = "rules"
+  end
+
+  ImGui.SameLine()
+  ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        C_BTN_YELLOW)
+  ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, C_BTN_YELLOW_HOV)
+  if navButton("Test") then
+    UIState.rulesReturnMode = UIState.mode
+    UIState.mode = "test"
+  end
+  ImGui.PopStyleColor(2)
+end
+
+----------------------------------------------------------------------
+-- Value widgets (renderValueWidget)
+----------------------------------------------------------------------
+
 local function renderValueWidget(row)
   local entry = row.entry
-  
+
   if entry.widget == "int" then
     local ch; ch, row.value = ImGui.InputInt("##v", row.value, 1, 10)
+
   elseif entry.widget == "float" then
     local ch; ch, row.value = ImGui.InputFloat("##v", row.value, 0.01, 0.1, "%.4f")
+
   elseif entry.widget == "bool" then
     local ch; ch, row.value = ImGui.Checkbox("##v", row.value)
+
   elseif entry.widget == "string" then
     local ch; ch, row.value = ImGui.InputText("##v", row.value, 256)
     if ImGui.IsItemHovered() and row.value and #row.value > 0 then
       ImGui.SetTooltip(row.value)
     end
-    
+
   elseif entry.widget == "enum" then
-    local keys, labels = {}, {}
-    for k, v in pairs(entry.enumTable) do
-      table.insert(keys, k); table.insert(labels, v)
+    -- cache keys/labels on the entry so we don't rebuild every frame
+    if not entry._enumKeys then
+      entry._enumKeys, entry._enumLabels = {}, {}
+      for k, v in pairs(entry.enumTable) do
+        table.insert(entry._enumKeys, k); table.insert(entry._enumLabels, v)
+      end
     end
+    local keys, labels = entry._enumKeys, entry._enumLabels
     local currentIdx = 1
-    for i, k in ipairs(keys) do
-      if k == row.value then currentIdx = i end
-    end
+    for i, k in ipairs(keys) do if k == row.value then currentIdx = i end end
     local ch ---@diagnostic disable-next-line
     ch, currentIdx = ImGui.Combo("##v", currentIdx - 1, labels, #labels)
     if ch then row.value = keys[currentIdx + 1] end
+
   elseif entry.widget == "enumset" then
-    local current = type(row.value) == "table" and row.value or {}
+    local current = {}
+    if type(row.value) == "table" then current = row.value end
     local parts = {}
-    for _, v in ipairs(current) do
-      table.insert(parts, tostring(entry.enumTable[v] or v))
-    end
+    for _, v in ipairs(current) do table.insert(parts, tostring(entry.enumTable[v] or v)) end
     local buttonLabel = #parts > 0 and table.concat(parts, "|") or "none"
-    local popupId = "##enumset" .. tostring(entry.propKey or entry.label)
-    if ImGui.Button(buttonLabel .. "##esb") then
-      ImGui.OpenPopup(popupId)
-    end
+    if not entry._popupId then entry._popupId = "##enumset" .. tostring(entry.propKey or entry.label) end
+    local popupId = entry._popupId
+    if ImGui.Button(buttonLabel .. "##esb") then ImGui.OpenPopup(popupId) end
     if ImGui.BeginPopup(popupId) then
       for k, v in pairs(entry.enumTable) do
-        local isSelected = false
-        local selectedIdx = nil
+        local isSelected, selectedIdx = false, nil
         for i, sv in ipairs(current) do
           if sv == k then isSelected = true; selectedIdx = i; break end
         end
         local fch, newIsSet = ImGui.Checkbox(v, isSelected)
         if fch then
-          if newIsSet then
-            table.insert(current, k)
-          elseif selectedIdx then
-            table.remove(current, selectedIdx)
-          end
+          if newIsSet then table.insert(current, k)
+          elseif selectedIdx then table.remove(current, selectedIdx) end
         end
       end
       ImGui.EndPopup()
     end
     row.value = current --[[@as any]]
+
   elseif entry.widget == "flags" then
-    local current = tonumber(row.value) or 0    
+    local current = tonumber(row.value) or 0
     local parts = {}
     for mask, flaglabel in pairs(entry.flagTable) do
-      if bit.band(current, mask) ~= 0 then
-        table.insert(parts, flaglabel)
-      end
+      if bit.band(current, mask) ~= 0 then table.insert(parts, flaglabel) end
     end
     local sep = row.op == "AND" and "&" or "|"
-    
     local buttonLabel = #parts > 0 and table.concat(parts, sep) or "none"
-    local popupId = "##flags" .. tostring(entry.propKey or entry.label)
-    if ImGui.Button(buttonLabel .. "##fb") then
-      ImGui.OpenPopup(popupId)
-    end
+    if not entry._popupId then entry._popupId = "##flags" .. tostring(entry.propKey or entry.label) end
+    local popupId = entry._popupId
+    if ImGui.Button(buttonLabel .. "##fb") then ImGui.OpenPopup(popupId) end
     if ImGui.BeginPopup(popupId) then
       for mask, flaglabel in pairs(entry.flagTable) do
         local isSet = bit.band(current, mask) ~= 0
@@ -638,76 +704,65 @@ local function renderValueWidget(row)
       ImGui.EndPopup()
     end
     row.value = current
+
   elseif entry.widget == "wieldreq" then
     local v = row.value
-    if type(v) ~= "table" then
-      v = { reqType=7, skillType=0, difficulty=1 }
-    end
+    if type(v) ~= "table" then v = { reqType=7, skillType=0, difficulty=1 } end
 
-    -- first combo: requirement type
-    local reqLabels = { "Skill", "Base Skill", "Attribute", "Base Attribute", "Vital", "Base Vital", "Level", "Training","DONTUSE","DONTUSE","Creature Type", "Heritage" }
-        local reqIdx = 7
-    for i=1,#reqLabels do
-      if i == v.reqType then 
-        reqIdx = i
-      end 
-    end
+    local reqIdx = 7
+    for i = 1, #WIELD_REQ_LABELS do if i == v.reqType then reqIdx = i end end
     ImGui.SetNextItemWidth(COL_VALUE)
-    local ch, ni = ImGui.Combo("##wreqtype", reqIdx-1, reqLabels, #reqLabels)
+    local ch, ni = ImGui.Combo("##wreqtype", reqIdx-1, WIELD_REQ_LABELS, #WIELD_REQ_LABELS)
     if ch then v.reqType = ni+1; v.skillType = 0 end
 
-    -- second combo: options depend on reqType
     if v.reqType == 7 then
-      -- level: just a number, no second combo
+      -- level: no second combo needed
     elseif v.reqType == 8 or v.reqType == 1 or v.reqType == 2 then
-      -- skill — pull from SkillId enum
-      local skillLabels, skillValues = {}, {}
-      ---@diagnostic disable-next-line
-      for _, sk in ipairs(SkillId.GetValues()) do
-        table.insert(skillLabels, tostring(sk)); table.insert(skillValues, sk.ToNumber())
+      -- skill list: cache on entry since SkillId.GetValues() is a C# call
+      if not entry._skillLabels then
+        entry._skillLabels, entry._skillValues = {}, {}
+        ---@diagnostic disable-next-line
+        for _, sk in ipairs(SkillId.GetValues()) do
+          table.insert(entry._skillLabels, tostring(sk))
+          table.insert(entry._skillValues, sk.ToNumber())
+        end
       end
+      local skillLabels, skillValues = entry._skillLabels, entry._skillValues
       local si = 1
       ImGui.SetNextItemWidth(COL_VALUE)
       for i, sv in ipairs(skillValues) do if sv == v.skillType then si = i end end
       local sch, sni = ImGui.Combo("##wreqskill", si-1, skillLabels, #skillLabels)
       if sch then v.skillType = skillValues[sni+1] end
     elseif v.reqType == 3 or v.reqType == 4 then
-      local attrLabels = {"Strength","Endurance","Quickness","Coordination","Focus","Self"}
-      local si = math.max(1, v.skillType)
       ImGui.SetNextItemWidth(COL_VALUE)
-      local ach, ani = ImGui.Combo("##wreqattr", si-1, attrLabels, #attrLabels)
+      local ach, ani = ImGui.Combo("##wreqattr", math.max(1, v.skillType)-1, ATTR_LABELS, #ATTR_LABELS)
       if ach then v.skillType = ani+1 end
     elseif v.reqType == 5 or v.reqType == 6 then
-      local vitalLabels = {"Health","Mana","Stamina"}
-      local si = math.max(1, v.skillType)
       ImGui.SetNextItemWidth(COL_VALUE)
-      local vch, vni = ImGui.Combo("##wreqvitals", si-1, vitalLabels, #vitalLabels)
+      local vch, vni = ImGui.Combo("##wreqvitals", math.max(1, v.skillType)-1, VITAL_LABELS, #VITAL_LABELS)
       if vch then v.skillType = vni+1 end
     elseif v.reqType == 12 then
-      local heritageLabels = {"Aluvian","Gharu'ndim","Sho","Viamontian","Umbraen","Gearknight","Tumerok","Lugian","Empyrean","Penumbraen","Undead"}
-      local si = math.max(1, v.skillType)
       ImGui.SetNextItemWidth(COL_VALUE)
-      local hch, hni = ImGui.Combo("##wreqher", si-1, heritageLabels, #heritageLabels)
+      local hch, hni = ImGui.Combo("##wreqher", math.max(1, v.skillType)-1, HERITAGE_LABELS, #HERITAGE_LABELS)
       if hch then v.skillType = hni+1 end
     end
 
     if v.reqType == 8 then
-      local trainingLevels = {"Untrained","Trained","Specialized"}
-      local si = math.max(1, v.difficulty)
       ImGui.SetNextItemWidth(COL_VALUE)
-      local tch, tni = ImGui.Combo("##wreqdiff", si-1, trainingLevels, #trainingLevels)
+      local tch, tni = ImGui.Combo("##wreqdiff", math.max(1, v.difficulty)-1, TRAINING_LABELS, #TRAINING_LABELS)
       if tch then v.difficulty = tni+1 end
-      row.value = v
     else
-      local diff = v.difficulty or 1
       ImGui.SetNextItemWidth(COL_VALUE)
-      local dch, newDiff = ImGui.InputInt("##wreqdiff", diff, 1, 10)
+      local dch, newDiff = ImGui.InputInt("##wreqdiff", v.difficulty or 1, 1, 10)
       if dch and newDiff then v.difficulty = newDiff end
-      row.value = v
     end
-    
+    row.value = v
   end
 end
+
+----------------------------------------------------------------------
+-- Editor rule row
+----------------------------------------------------------------------
 
 local function setupRuleColumns()
   ImGui.TableSetupColumn("##label",  _imgui.ImGuiTableColumnFlags.WidthStretch)
@@ -726,38 +781,581 @@ local function renderInlineRow(row, i)
   ImGui.TableSetColumnIndex(1)
   ImGui.SetNextItemWidth(COL_OP)
   local opIdx = 1
-  for j, op in ipairs(row.entry.ops) do
-    if op == row.op then opIdx = j end
-  end
-  
-  if #row.entry.ops==1 then
-    row.op = row.entry.ops[1]
-    ImGui.Text(row.op)  
+  for j, op in ipairs(row.entry.ops) do if op == row.op then opIdx = j end end
+  if #row.entry.ops == 1 then
+    row.op = row.entry.ops[1]; ImGui.Text(row.op)
   else
     local ch, newOpIdx = ImGui.Combo("##op", opIdx - 1, row.entry.ops, #row.entry.ops)
     if ch then row.op = row.entry.ops[newOpIdx + 1] end
   end
-  
+
   ImGui.TableSetColumnIndex(2)
   ImGui.SetNextItemWidth(COL_VALUE)
   renderValueWidget(row)
 
   ImGui.TableSetColumnIndex(3)
-  
-  ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        Vector4.new(0.6, 0.1, 0.1, 1))
-  ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, Vector4.new(0.8, 0.2, 0.2, 1))
+  ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        C_BTN_RED)
+  ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, C_BTN_RED_HOV)
   if ImGui.SmallButton("x") then row._remove = true end
   ImGui.PopStyleColor(2)
-  
+
   ImGui.PopID()
 end
-hud.WindowSettings = _imgui.ImGuiWindowFlags.NoScrollbar
+
 ----------------------------------------------------------------------
--- Main render
+-- Rule summary helpers (rules view, read-only display)
+----------------------------------------------------------------------
+
+local function ruleLabelStr(rule)
+  if rule.propType == "wieldReq" and type(rule.value) == "table" then
+    local rv = rule.value
+    return string.format("Wield: %s[%d]", WIELD_REQ_LABELS[rv.reqType] or "?", rv.skillType)
+  elseif rule.propType == "spells" then
+    return "Spell(s)"
+  elseif rule.propKey then
+    local entry = byPropKey[rule.propKey]
+    return entry and entry.label or rule.propKey
+  else
+    return tostring(rule.propIdNum)
+  end
+end
+
+local function ruleValueStr(rule)
+  if rule.propType == "wieldReq" and type(rule.value) == "table" then
+    return tostring(rule.value.difficulty)
+  elseif type(rule.value) == "table" then
+    local parts = {}
+    local manifestEntry = byPropKey[rule.propKey]
+    for _, v in ipairs(rule.value) do
+      table.insert(parts, tostring(manifestEntry and manifestEntry.enumTable and manifestEntry.enumTable[v] or v))
+    end
+    return table.concat(parts, " | ")
+  else
+    local me = byPropKey[rule.propKey]
+    if me and me.widget == "enum" and me.enumTable then
+      return tostring(me.enumTable[tonumber(rule.value)] or rule.value)
+    elseif me and me.widget == "flags" and me.flagTable then
+      local parts, v = {}, tonumber(rule.value) or 0
+      for mask, lbl in pairs(me.flagTable) do
+        if bit.band(v, mask) ~= 0 then table.insert(parts, lbl) end
+      end
+      local sep = rule.op == "AND" and " & " or " | "
+      return #parts > 0 and table.concat(parts, sep) or "0"
+    else
+      local numVal = tonumber(rule.value)
+      if numVal and math.floor(numVal) ~= numVal then
+        return string.format("%.3f", numVal)
+      else
+        return tostring(rule.value)
+      end
+    end
+  end
+end
+
+local function renderRuleSummaryTable(ruleSet)
+  if ImGui.BeginTable("##ruleview", 3, _imgui.ImGuiTableFlags.SizingFixedFit) then
+    ImGui.TableSetupColumn("##rl", _imgui.ImGuiTableColumnFlags.WidthFixed, 130)
+    ImGui.TableSetupColumn("##ro", _imgui.ImGuiTableColumnFlags.WidthFixed, 50)
+    ImGui.TableSetupColumn("##rv", _imgui.ImGuiTableColumnFlags.WidthFixed, 90)
+    for ki, rule in ipairs(ruleSet.rules) do
+      ImGui.PushID(ki)
+      ImGui.TableNextRow()
+      ImGui.TableSetColumnIndex(0); ImGui.Text(ruleLabelStr(rule))
+      ImGui.TableSetColumnIndex(1); ImGui.Text(rule.op)
+      ImGui.TableSetColumnIndex(2); ImGui.Text(ruleValueStr(rule))
+      ImGui.PopID()
+    end
+    ImGui.EndTable()
+  end
+end
+
+----------------------------------------------------------------------
+-- Rules mode: single ruleset row
+----------------------------------------------------------------------
+
+local function renderRulesetRow(profile, ri, ruleSet, frameH, fixedW, drawList, style, pad)
+  ImGui.PushID(ri)
+  ImGui.BeginGroup()
+  local deleted
+
+  if ImGui.BeginTable("##rsrow", 2, _imgui.ImGuiTableFlags.SizingFixedFit) then
+    ImGui.TableSetupColumn("##rsleft",  _imgui.ImGuiTableColumnFlags.WidthStretch)
+    ImGui.TableSetupColumn("##rsright", _imgui.ImGuiTableColumnFlags.WidthFixed, fixedW)
+    ImGui.TableNextRow()
+
+    -- checkbox + name
+    ImGui.TableSetColumnIndex(0)
+    local enCh, enVal = ImGui.Checkbox("##rse", ruleSet.enabled)
+    if enCh then ruleSet.enabled = enVal; saveLootProfile() end
+    ImGui.SameLine()
+
+    if ruleSet.editingName then
+      if ruleSet.wantFocus then ImGui.SetKeyboardFocusHere(); ruleSet.wantFocus = false end
+      local rsCh, rsVal = ImGui.InputText("##rsname", ruleSet.name, 64, _imgui.ImGuiInputTextFlags.EnterReturnsTrue)
+      if rsCh then ruleSet.name = rsVal; ruleSet.editingName = false; saveLootProfile() end
+      if ImGui.IsItemDeactivated() then ruleSet.editingName = false end
+    else
+      ImGui.Selectable(ruleSet.name .. "###rssel", ruleSet.open or false, _imgui.ImGuiSelectableFlags.AllowDoubleClick)
+      if ImGui.IsItemClicked(_imgui.ImGuiMouseButton.Left) then
+        if ImGui.IsMouseDoubleClicked(_imgui.ImGuiMouseButton.Left) then
+          ruleSet.wantFocus = true; ruleSet.editingName = true
+        else
+          ruleSet.open = not (ruleSet.open or false)
+        end
+      end
+    end
+
+    -- reorder + delete buttons
+    ImGui.TableSetColumnIndex(1)
+    ImGui.BeginDisabled(ri == 1)
+    if ImGui.ArrowButton("##up", _imgui.ImGuiDir.Up) then
+      profile.ruleSets[ri], profile.ruleSets[ri-1] = profile.ruleSets[ri-1], profile.ruleSets[ri]
+      saveLootProfile()
+    end
+    ImGui.EndDisabled()
+    ImGui.SameLine()
+    ImGui.BeginDisabled(ri == #profile.ruleSets)
+    if ImGui.ArrowButton("##dn", _imgui.ImGuiDir.Down) then
+      profile.ruleSets[ri], profile.ruleSets[ri+1] = profile.ruleSets[ri+1], profile.ruleSets[ri]
+      saveLootProfile()
+    end
+    ImGui.EndDisabled()
+    ImGui.SameLine()
+    ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        C_BTN_RED)
+    ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, C_BTN_RED_HOV)
+    deleted = ImGui.SmallButton("x")
+    ImGui.PopStyleColor(2)
+    ImGui.EndTable()
+  end
+
+  -- expanded content
+  if ruleSet.open and not ruleSet.editingName then
+    ImGui.Indent()
+    local spacing = ImGui.GetStyle().ItemSpacing.X
+    local btnW    = (ImGui.GetContentRegionAvail().X - frameH - spacing) / 2
+
+  if ImGui.Button("Edit Rule", Vector2.new(btnW, frameH)) then
+      UIState.editorReturnMode = "rules"
+      UIState.mode             = "editor"
+      UIState.category         = ruleSet.category
+      UIState.presentProps     = {}
+      UIState.absentProps      = {}
+      UIState.propFilter       = ""
+      UIState.filteredAbsent   = nil
+      UIState.editingRuleSet   = { profile=profile, rs=ruleSet }
+      local inRuleset = {}
+      for _, rule in ipairs(ruleSet.rules) do
+        inRuleset[rule.propKey or rule.propType] = rule
+      end
+      for _, entry in ipairs(manifest.forCategory(ruleSet.category)) do
+        local rule = inRuleset[entry.propKey or entry.propType]
+        if rule then
+          table.insert(UIState.presentProps, { entry=entry, value=rule.value, op=rule.op })
+        else
+          table.insert(UIState.absentProps, entry)
+        end
+      end
+    end
+    ImGui.SameLine()
+
+    if ImGui.Button("Copy Rule", Vector2.new(btnW, frameH)) then
+      local copy = {
+        name     = ruleSet.name .. " (copy)",
+        enabled  = ruleSet.enabled,
+        category = ruleSet.category,
+        rules    = {},
+      }
+      for _, rule in ipairs(ruleSet.rules) do
+        local ruleCopy = {}
+        for k, v in pairs(rule) do
+          -- value may be a table (wieldreq dict or enumset array) — shallow copy one level
+          if type(v) == "table" then
+            local vCopy = {}
+            for k2, v2 in pairs(v) do vCopy[k2] = v2 end
+            ruleCopy[k] = vCopy
+          else
+            ruleCopy[k] = v
+          end
+        end
+        table.insert(copy.rules, ruleCopy)
+      end
+      table.insert(profile.ruleSets, copy)
+      saveLootProfile()
+    end
+    renderRuleSummaryTable(ruleSet)
+    ImGui.Unindent()
+  end
+
+  ImGui.EndGroup()
+
+  -- border rect
+  local rmin = ImGui.GetItemRectMin()
+  local rmax = ImGui.GetItemRectMax()
+  drawList.AddRect(
+    Vector2.new(ImGui.GetWindowPos().X - style.WindowPadding.X - pad.X, rmin.Y - pad.Y),
+    Vector2.new(ImGui.GetWindowPos().X + ImGui.GetWindowSize().X + pad.X, rmax.Y + pad.Y),
+    0x44FFFFFF, 3)
+
+  ImGui.Spacing()
+  ImGui.PopID()
+  return deleted
+end
+
+----------------------------------------------------------------------
+-- Rules mode: profile selector bar
+----------------------------------------------------------------------
+
+local function renderProfileSelector()
+  local profile = activeProfiles[UIState.selectedProfile]
+
+  if UIState.editingProfileName and profile then
+    ImGui.SetNextItemWidth(180)
+    local rnCh, rnVal = ImGui.InputText("##pname", profile.name, 64, _imgui.ImGuiInputTextFlags.EnterReturnsTrue)
+    if rnCh then profile.name = rnVal; saveLootProfile(); UIState.editingProfileName = false end
+    ImGui.SameLine()
+    if ImGui.SmallButton("Cancel") then UIState.editingProfileName = false end
+    return profile
+  end
+
+  if ImGui.Button(" + ") then
+    table.insert(activeProfiles, { name="New Profile", active=true, ruleSets={} })
+    UIState.selectedProfile = #activeProfiles
+    saveLootProfile()
+  end
+  ImGui.SameLine()
+
+  if profileLabelsDirty then
+    cachedProfileLabels = {}
+    for _, p in ipairs(activeProfiles) do
+      table.insert(cachedProfileLabels, (p.active and "* " or "  ") .. p.name)
+    end
+    profileLabelsDirty = false
+  end
+  ImGui.SetNextItemWidth(
+    ImGui.GetContentRegionAvail().X
+    - ImGui.GetFrameHeight() * 2
+    - ImGui.GetStyle().ItemSpacing.X * 2
+  )
+  local pCh, pIdx = ImGui.Combo("##profile", UIState.selectedProfile - 1, cachedProfileLabels, #cachedProfileLabels)
+  if pCh then
+    UIState.selectedProfile = pIdx + 1
+    for _, p in ipairs(activeProfiles) do p.active = false end
+    activeProfiles[UIState.selectedProfile].active = true
+    saveLootProfile()
+  end
+  ImGui.SameLine()
+
+  if ImGui.SmallButton("[ _ ]") then
+    UIState.editingProfileName   = true
+    UIState.wantProfileNameFocus = true
+  end
+  ImGui.SameLine()
+
+  ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        C_BTN_RED)
+  ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, C_BTN_RED_HOV)
+  if ImGui.SmallButton("x") then
+    table.remove(activeProfiles, UIState.selectedProfile)
+    UIState.selectedProfile = math.max(1, UIState.selectedProfile - 1)
+    if #activeProfiles > 0 then activeProfiles[UIState.selectedProfile].active = true end
+    saveLootProfile()
+  end
+  ImGui.PopStyleColor(2)
+
+  return activeProfiles[UIState.selectedProfile]
+end
+
+----------------------------------------------------------------------
+-- Editor mode: add-property picker with search filter
+----------------------------------------------------------------------
+
+local function renderPropertyPicker()
+  if #UIState.absentProps == 0 then return end
+
+  -- rebuild filtered list if stale (filter change or absent list change)
+  if UIState.filteredAbsent == nil then
+    UIState.filteredAbsent = {}
+    UIState.filteredLabels = {}
+    local filter = (UIState.propFilter or ""):lower()
+    for i, entry in ipairs(UIState.absentProps) do
+      if filter == "" or entry.label:lower():find(filter, 1, true) then
+        table.insert(UIState.filteredAbsent, { entry=entry, origIdx=i })
+        table.insert(UIState.filteredLabels, entry.label)
+      end
+    end
+    UIState.addComboIdx = 0
+  end
+
+  local style   = ImGui.GetStyle()
+  local addW    = ImGui.CalcTextSize("+ Add").X + style.FramePadding.X * 2
+  local comboW  = ImGui.GetContentRegionAvail().X - addW - style.ItemSpacing.X
+  local noMatch = #UIState.filteredAbsent == 0
+
+  ImGui.SetNextItemWidth(comboW)
+  ImGui.BeginDisabled(noMatch)
+  local ch, idx = ImGui.Combo("##addprop", UIState.addComboIdx, UIState.filteredLabels, #UIState.filteredLabels)
+  if ch then UIState.addComboIdx = idx end
+  ImGui.EndDisabled()
+
+  ImGui.SameLine()
+  ImGui.BeginDisabled(noMatch)
+  if ImGui.Button("+ Add") then
+    local selected = UIState.filteredAbsent[UIState.addComboIdx + 1]
+    if selected then
+      local isWield = selected.entry.widget == "wieldreq"
+      local wieldCount = 0
+      if isWield then
+        for _, row in ipairs(UIState.presentProps) do
+          if row.entry.widget == "wieldreq" then wieldCount = wieldCount + 1 end
+        end
+      end
+      if isWield and wieldCount >= 3 then
+        table.remove(UIState.absentProps, selected.origIdx)
+      else
+        if not isWield then table.remove(UIState.absentProps, selected.origIdx) end
+        table.insert(UIState.presentProps, {
+          entry = selected.entry,
+          value = selected.entry.default,
+          op    = selected.entry.ops[1],
+        })
+      end
+      UIState.addComboIdx    = 0
+      UIState.propFilter     = ""
+      UIState.filteredAbsent = nil
+    end
+  end
+  ImGui.EndDisabled()
+
+  -- search box sits below, same width as combo, hint text handled natively
+  ImGui.SetNextItemWidth(comboW)
+  local fCh, fVal = ImGui.InputTextWithHint("##propfilter", "Search properties...", UIState.propFilter or "", 64)
+  if fCh and fVal then UIState.propFilter = fVal; UIState.filteredAbsent = nil end
+end
+
+----------------------------------------------------------------------
+-- Mode renderers
+----------------------------------------------------------------------
+
+local function renderNoneMode()
+  renderTopNav()
+  ImGui.Separator()
+  ImGui.TextDisabled("No item inspected.")
+end
+
+local function renderTextMode()
+  renderTopNav()
+  ImGui.Separator()
+  if ImGui.BeginChild("##properties") then
+    for _, line in ipairs(UIState.textLines or {}) do
+      if line.color then
+        ImGui.PushStyleColor(_imgui.ImGuiCol.Text, line.color)
+        ImGui.TextWrapped(line.text)
+        ImGui.PopStyleColor()
+      else
+        ImGui.TextWrapped(line.text)
+      end
+    end
+  end
+  ImGui.EndChild()
+end
+
+local function renderRulesMode()
+  -- back + import
+  if navButton("Back", true) then UIState.mode = UIState.rulesReturnMode or "none" end
+  ImGui.SameLine()
+  if #importList > 0 then
+    if importLabelsDirty then
+      cachedImportLabels = {}
+      for _, e in ipairs(importList) do table.insert(cachedImportLabels, e.label) end
+      importLabelsDirty = false
+    end
+    local addW    = ImGui.CalcTextSize("Add").X + ImGui.GetStyle().FramePadding.X * 2
+    local spacing = ImGui.GetStyle().ItemSpacing.X
+    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - addW - spacing)
+    local iCh, iIdx = ImGui.Combo("##import", UIState.importIdx, cachedImportLabels, #cachedImportLabels)
+    if iCh then UIState.importIdx = iIdx end
+    ImGui.SameLine()
+    if ImGui.Button("Add") then
+      local entry = importList[UIState.importIdx + 1]
+      if entry then
+        loadLootProfile(entry.server, entry.character, true)
+        saveLootProfile()
+        populateImportList()
+      end
+    end
+  else
+    ImGui.TextDisabled("No other characters in save file.")
+  end
+  ImGui.Separator()
+
+  if #activeProfiles == 0 then
+    ImGui.TextDisabled("No profiles yet.")
+    if ImGui.Button("New") then
+      table.insert(activeProfiles, { name="New Profile", active=true, ruleSets={} })
+      UIState.selectedProfile = #activeProfiles
+      saveLootProfile()
+    end
+    return
+  end
+
+  local profile = renderProfileSelector()
+  ImGui.Separator()
+  ImGui.TextDisabled("Rules (double click to edit name)")
+  if not profile then ImGui.TextDisabled("Select a profile."); return end
+
+  if ImGui.BeginChild("##rulesetlist", Vector2.new(0, ImGui.GetContentRegionAvail().Y), false) then
+    local style    = ImGui.GetStyle()
+    local frameH   = ImGui.GetFrameHeight()
+    local fixedW   = frameH * 3 + style.ItemSpacing.X * 2
+    local drawList = ImGui.GetWindowDrawList()
+    local pad      = style.FramePadding
+
+    local deletedRi = nil
+    for ri, ruleSet in ipairs(profile.ruleSets) do
+      local deleted = renderRulesetRow(profile, ri, ruleSet, frameH, fixedW, drawList, style, pad)
+      if deleted then deletedRi = ri end
+    end
+    if deletedRi then table.remove(profile.ruleSets, deletedRi); saveLootProfile() end
+    ImGui.Spacing()
+  end
+  ImGui.EndChild()
+end
+
+local function renderEditorMode()
+  if navButton("Cancel", true) then
+    UIState.editingRuleSet = nil
+    UIState.mode           = UIState.editorReturnMode or "none"
+  end
+  ImGui.SameLine()
+  if navButton("Save Rule") then
+    if UIState.editingRuleSet then
+      local rs = UIState.editingRuleSet.rs
+      rs.rules = {}
+      for _, row in ipairs(UIState.presentProps) do
+        table.insert(rs.rules, {
+          propType  = row.entry.propType,
+          propIdNum = row.entry.propId or nil,
+          propKey   = row.entry.propKey,
+          op        = row.op,
+          value     = row.value,
+        })
+      end
+      saveLootProfile()
+      UIState.editingRuleSet = nil
+    else
+      commitRuleToProfile(UIState)
+    end
+    UIState.mode = UIState.editorReturnMode or "none"
+  end
+  ImGui.Separator()
+
+  -- ruleset name input
+  local displayName = UIState.editingRuleSet and UIState.editingRuleSet.rs.name
+                   or UIState.item and UIState.item.name or ""
+  ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X)
+  local nameCh, nameVal = ImGui.InputText("##rulename", displayName, 128)
+  if nameCh then
+    if UIState.editingRuleSet then UIState.editingRuleSet.rs.name = nameVal
+    elseif UIState.item then UIState.item.name = nameVal end
+  end
+  ImGui.Spacing()
+
+  -- rule table + property picker
+  if ImGui.BeginChild("##ruleTable") then
+    local toRemove = nil
+    if ImGui.BeginTable("##rules", 4, _imgui.ImGuiTableFlags.SizingFixedFit) then
+      setupRuleColumns()
+      for i, row in ipairs(UIState.presentProps) do
+        renderInlineRow(row, i)
+        if row._remove then toRemove = i end
+      end
+      ImGui.EndTable()
+    end
+
+    if toRemove then
+      local row = table.remove(UIState.presentProps, toRemove)
+      row._remove            = nil
+      UIState.filteredAbsent = nil
+      table.insert(UIState.absentProps, row.entry)
+    end
+
+    ImGui.Spacing()
+    renderPropertyPicker()
+  end
+  ImGui.EndChild()
+end
+
+local function renderTestMode()
+  if navButton("Back", true) then UIState.mode = UIState.rulesReturnMode or "none" end
+  ImGui.Separator()
+
+  if not UIState.item then ImGui.TextDisabled("No item inspected."); return end
+
+  ImGui.Text(UIState.item.name .. "  [" .. UIState.category .. "]")
+  ImGui.Spacing()
+
+  local matched = false
+  for _, profile in ipairs(activeProfiles) do
+    local profileLabel = (profile.active and "* " or "  ") .. profile.name
+    if ImGui.CollapsingHeader(profileLabel) then
+      if ImGui.BeginTable("##testresults", 2, _imgui.ImGuiTableFlags.SizingFixedFit) then
+        ImGui.TableSetupColumn("##rsname",   _imgui.ImGuiTableColumnFlags.WidthStretch)
+        ImGui.TableSetupColumn("##rsresult", _imgui.ImGuiTableColumnFlags.WidthFixed, 200)
+        for _, ruleSet in ipairs(profile.ruleSets) do
+          ImGui.TableNextRow()
+          ImGui.TableSetColumnIndex(0)
+          ImGui.Text(ruleSet.name or "?")
+          ImGui.TableSetColumnIndex(1)
+          if not ruleSet.enabled then
+            ImGui.TextDisabled("off")
+          else
+            local pass, failRule = true, nil
+            for _, rule in ipairs(ruleSet.rules) do
+              if not evalRule(rule, UIState.item) then pass = false; failRule = rule; break end
+            end
+
+            if pass then
+              ImGui.PushStyleColor(_imgui.ImGuiCol.Text, C_TEXT_GREEN)
+              ImGui.Text("MATCH")
+              ImGui.PopStyleColor()
+              if profile.active then matched = true end
+            else
+              ImGui.PushStyleColor(_imgui.ImGuiCol.Text, C_TEXT_RED)
+              ImGui.Text("no")
+              ImGui.PopStyleColor()
+              if failRule then
+                local me = failRule.propKey and byPropKey[failRule.propKey]
+                local failLabel = me and me.label or failRule.propKey or failRule.propType or "?"
+                ImGui.SameLine()
+                ImGui.PushStyleColor(_imgui.ImGuiCol.Text, C_TEXT_ORANGE)
+                ImGui.TextWrapped(failLabel .. " " .. tostring(failRule.op) .. " " .. tostring(failRule.value))
+                ImGui.PopStyleColor()
+              end
+            end
+          end
+        end
+        ImGui.EndTable()
+      end
+    end
+  end
+
+  ImGui.Spacing()
+  ImGui.Separator()
+  if matched then
+    ImGui.PushStyleColor(_imgui.ImGuiCol.Text, C_TEXT_GREEN)
+    ImGui.Text("Would be looted.")
+    ImGui.PopStyleColor()
+  else
+    ImGui.PushStyleColor(_imgui.ImGuiCol.Text, C_TEXT_RED)
+    ImGui.Text("Would NOT be looted.")
+    ImGui.PopStyleColor()
+  end
+end
+
+----------------------------------------------------------------------
+-- Main render dispatcher
 ----------------------------------------------------------------------
 
 hud.OnRender.Add(function()
-  -- cache window geometry every frame; OnTick writes to disk on change
   windowStates.hud = {
     posX    = ImGui.GetWindowPos().X,
     posY    = ImGui.GetWindowPos().Y,
@@ -766,602 +1364,10 @@ hud.OnRender.Add(function()
     visible = hud.Visible,
   }
 
-  if UIState.mode == "none" then
-    if UIState.item and game.World.Selected and UIState.item.id==game.World.Selected.Id then
-      ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        Vector4.new(0.1, 0.6, 0.2, 0.5))
-      ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, Vector4.new(0.2, 0.8, 0.2, 0.75))
-      if navButton("+ Add Rule") then
-        UIState.editorReturnMode = UIState.mode
-        UIState.mode           = "editor"
-        UIState.propFilter     = ""
-        UIState.filteredAbsent = nil
-        UIState.editingRuleSet = nil
-      end
-      ImGui.PopStyleColor(2)
-    else
-      ImGui.BeginDisabled(true)
-      navButton("+ Add Rule")
-      ImGui.EndDisabled()
-    end
-
-    ImGui.SameLine()
-    if navButton("Rules") then 
-      UIState.rulesReturnMode = UIState.mode
-      UIState.mode = "rules"
-    end
-
-
-    ImGui.SameLine()
-    ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        Vector4.new(0.6, 0.6, 0.3, 0.5))
-    ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, Vector4.new(0.8, 0.8, 0.6, 0.8))
-    if navButton("Test") then 
-      UIState.rulesReturnMode = UIState.mode
-      UIState.mode = "test"
-    end
-    ImGui.PopStyleColor(2)
-    
-    ImGui.Separator()
-    ImGui.TextDisabled("No item inspected.")
-
-  ---------------------------------------------------------------------------
-  -- Text mode
-  ---------------------------------------------------------------------------
-  elseif UIState.mode == "text" then
-    if UIState.item and game.World.Selected and UIState.item.id==game.World.Selected.Id then
-      ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        Vector4.new(0.1, 0.6, 0.2, 0.5))
-      ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, Vector4.new(0.2, 0.8, 0.2, 0.75))
-      if navButton("+ Add Rule") then
-        UIState.editorReturnMode = UIState.mode
-        UIState.mode           = "editor"
-        UIState.propFilter     = ""
-        UIState.filteredAbsent = nil
-        UIState.editingRuleSet = nil
-      end
-      ImGui.PopStyleColor(2)
-    else
-      ImGui.BeginDisabled(true)
-      navButton("+ Add Rule")
-      ImGui.EndDisabled()
-    end
-    ImGui.SameLine()
-    if navButton("Rules") then 
-      UIState.rulesReturnMode = UIState.mode
-      UIState.mode = "rules" 
-    end
-
-    ImGui.SameLine()
-    ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        Vector4.new(0.6, 0.6, 0.3, 0.5))
-    ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, Vector4.new(0.8, 0.8, 0.6, 0.8))
-    if navButton("Test") then
-      UIState.rulesReturnMode = UIState.mode
-      UIState.mode = "test" 
-    end
-    ImGui.PopStyleColor(2)
-
-    ImGui.Separator()
-    if ImGui.BeginChild("##properties") then
-      for _, line in ipairs(UIState.textLines or {}) do
-        if line.color then
-          ImGui.PushStyleColor(_imgui.ImGuiCol.Text, line.color)
-          ImGui.TextWrapped(line.text)
-          ImGui.PopStyleColor()
-        else
-          ImGui.TextWrapped(line.text)
-        end
-      end
-    end
-    ImGui.EndChild()
-
----------------------------------------------------------------------------
-  -- Rules mode
-  ---------------------------------------------------------------------------
-  elseif UIState.mode == "rules" then
-    if navButton("Back", true) then
-      UIState.mode = UIState.rulesReturnMode or "none"
-    end
-    ImGui.SameLine()
-    if #importList > 0 then
-      local addW    = ImGui.CalcTextSize("Add").X + ImGui.GetStyle().FramePadding.X * 2
-      local spacing = ImGui.GetStyle().ItemSpacing.X
-      ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - addW - spacing)
-      local importLabels = {}
-      for _, e in ipairs(importList) do table.insert(importLabels, e.label) end
-      local iCh, iIdx = ImGui.Combo("##import", UIState.importIdx, importLabels, #importLabels)
-      if iCh then UIState.importIdx = iIdx end
-      ImGui.SameLine()
-      if ImGui.Button("Add") then
-        local entry = importList[UIState.importIdx + 1]
-        if entry then
-          loadLootProfile(entry.server, entry.character, true)
-          saveLootProfile()
-          populateImportList()
-        end
-      end
-    else
-      ImGui.TextDisabled("No other characters in save file.")
-    end
-    ImGui.Separator()
-
-    -- ── profile selector ──────────────────────────────────────────────────
-    if #activeProfiles == 0 then
-      ImGui.TextDisabled("No profiles yet.")
-      if ImGui.Button("New") then
-        table.insert(activeProfiles, { name="New Profile", active=true, ruleSets={} })
-        UIState.selectedProfile = #activeProfiles
-        saveLootProfile()
-      end
-    else
-      local profile = activeProfiles[UIState.selectedProfile]
-
-      if UIState.editingProfileName and profile then
-        ImGui.SetNextItemWidth(180)
-        local rnCh, rnVal = ImGui.InputText("##pname", profile.name, 64,
-          _imgui.ImGuiInputTextFlags.EnterReturnsTrue)
-        if rnCh then
-          profile.name = rnVal
-          saveLootProfile()
-          UIState.editingProfileName = false
-        end
-        ImGui.SameLine()
-        if ImGui.SmallButton("Cancel") then UIState.editingProfileName = false end
-      else
-        -- + new
-        if ImGui.Button(" + ") then
-          table.insert(activeProfiles, { name="New Profile", active=true, ruleSets={} })
-          UIState.selectedProfile = #activeProfiles
-          saveLootProfile()
-        end
-        ImGui.SameLine()
-
-        -- profile combo
-        local profileLabels = {}
-        for _, p in ipairs(activeProfiles) do
-          table.insert(profileLabels, (p.active and "* " or "  ") .. p.name)
-        end
-        ImGui.SetNextItemWidth(
-          ImGui.GetContentRegionAvail().X
-          - ImGui.GetFrameHeight() * 2        -- _ and x buttons
-          - ImGui.GetStyle().ItemSpacing.X * 2
-        )
-        local pCh, pIdx = ImGui.Combo("##profile", UIState.selectedProfile - 1, profileLabels, #profileLabels)
-        if pCh then
-          UIState.selectedProfile = pIdx + 1
-          for _, p in ipairs(activeProfiles) do p.active = false end
-          activeProfiles[UIState.selectedProfile].active = true
-          saveLootProfile()
-        end
-        ImGui.SameLine()
-
-        -- rename
-        if ImGui.SmallButton("[ _ ]") then
-          UIState.editingProfileName = true
-          UIState.wantProfileNameFocus = true
-        end
-        ImGui.SameLine()
-
-        -- delete
-        ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        Vector4.new(0.6, 0.1, 0.1, 1))
-        ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, Vector4.new(0.8, 0.2, 0.2, 1))
-        if ImGui.SmallButton("x") then
-          table.remove(activeProfiles, UIState.selectedProfile)
-          UIState.selectedProfile = math.max(1, UIState.selectedProfile - 1)
-          if #activeProfiles > 0 then
-            activeProfiles[UIState.selectedProfile].active = true
-          end
-          saveLootProfile()
-        end
-        ImGui.PopStyleColor(2)
-      end
-
-      ImGui.Separator()
-      ImGui.TextDisabled("Rules (double click to edit name)")
-
-      if not profile then
-        ImGui.TextDisabled("Select a profile.")
-      else
-        -- ── ruleset list ──────────────────────────────────────────────────
-        if ImGui.BeginChild("##rulesetlist", Vector2.new(0, ImGui.GetContentRegionAvail().Y), false) then
-          local style    = ImGui.GetStyle()
-          local frameH   = ImGui.GetFrameHeight()
-          local fixedW   = frameH * 3 + style.ItemSpacing.X * 2
-          local drawList = ImGui.GetWindowDrawList()
-          local pad      = style.FramePadding
-          
-          local deletedRi = nil
-          for ri, ruleSet in ipairs(profile.ruleSets) do
-            ImGui.PushID(ri)
-            ImGui.BeginGroup()
-            
-            if ImGui.BeginTable("##rsrow", 2, _imgui.ImGuiTableFlags.SizingFixedFit) then
-              ImGui.TableSetupColumn("##rsleft",  _imgui.ImGuiTableColumnFlags.WidthStretch)
-              ImGui.TableSetupColumn("##rsright", _imgui.ImGuiTableColumnFlags.WidthFixed, fixedW)
-              ImGui.TableNextRow()
-              
-              -- left: checkbox + selectable (click=open, dblclick=rename) or input
-              ImGui.TableSetColumnIndex(0)
-              local enCh, enVal = ImGui.Checkbox("##rse", ruleSet.enabled)
-              if enCh then ruleSet.enabled = enVal; saveLootProfile() end
-              ImGui.SameLine()
-              
-              if ruleSet.editingName then
-                if ruleSet.wantFocus then
-                  ImGui.SetKeyboardFocusHere()
-                  ruleSet.wantFocus = false
-                end
-                local rsCh, rsVal = ImGui.InputText("##rsname", ruleSet.name, 64,
-                _imgui.ImGuiInputTextFlags.EnterReturnsTrue)
-                if rsCh then
-                  ruleSet.name        = rsVal
-                  ruleSet.editingName = false
-                  saveLootProfile()
-                end
-                if ImGui.IsItemDeactivated() then ruleSet.editingName = false end
-              else
-                local label = ruleSet.name
-                ImGui.Selectable(label .. "###rssel",
-                ruleSet.open or false,
-                _imgui.ImGuiSelectableFlags.AllowDoubleClick)
-                if ImGui.IsItemClicked(_imgui.ImGuiMouseButton.Left) then
-                  if ImGui.IsMouseDoubleClicked(_imgui.ImGuiMouseButton.Left) then
-                    ruleSet.wantFocus   = true
-                    ruleSet.editingName = true
-                  else
-                    ruleSet.open = not (ruleSet.open or false)
-                  end
-                end
-              end
-              
-              -- right: up + dn + x
-              ImGui.TableSetColumnIndex(1)
-              ImGui.BeginDisabled(ri == 1)
-              if ImGui.ArrowButton("##up", _imgui.ImGuiDir.Up) then
-                profile.ruleSets[ri], profile.ruleSets[ri-1] = profile.ruleSets[ri-1], profile.ruleSets[ri]
-                saveLootProfile()
-              end
-              ImGui.EndDisabled()
-              ImGui.SameLine()
-              ImGui.BeginDisabled(ri == #profile.ruleSets)
-              if ImGui.ArrowButton("##dn", _imgui.ImGuiDir.Down) then
-                profile.ruleSets[ri], profile.ruleSets[ri+1] = profile.ruleSets[ri+1], profile.ruleSets[ri]
-                saveLootProfile()
-              end
-              ImGui.EndDisabled()
-              ImGui.SameLine()
-              ImGui.PushStyleColor(_imgui.ImGuiCol.Button,        Vector4.new(0.6, 0.1, 0.1, 1))
-              ImGui.PushStyleColor(_imgui.ImGuiCol.ButtonHovered, Vector4.new(0.8, 0.2, 0.2, 1))
-              if ImGui.SmallButton("x") then deletedRi = ri end
-              ImGui.PopStyleColor(2)
-              
-              ImGui.EndTable()
-            end
-            
-            -- expanded content
-            if ruleSet.open and not ruleSet.editingName then
-              ImGui.Indent()
-              
-              if ImGui.Button("Edit Rule", Vector2.new(ImGui.GetContentRegionAvail().X-frameH, frameH)) then
-                UIState.editorReturnMode = "rules"
-                UIState.mode           = "editor"
-                UIState.category       = ruleSet.category
-                UIState.presentProps   = {}
-                UIState.absentProps    = {}
-                UIState.propFilter     = ""
-                UIState.filteredAbsent = nil
-                UIState.editingRuleSet = { profile=profile, rs=ruleSet }
-                local inRuleset = {}
-                
-                for _, rule in ipairs(ruleSet.rules) do
-                  local ruleKey = rule.propKey or rule.propType
-                  inRuleset[ruleKey] = rule
-                end
-                for _, entry in ipairs(manifest.forCategory(ruleSet.category)) do
-                  local entryKey = entry.propKey or entry.propType
-                  local rule = inRuleset[entryKey]
-                  if rule then
-                    table.insert(UIState.presentProps, { entry=entry, value=rule.value, op=rule.op })
-                  else
-                    table.insert(UIState.absentProps, entry)
-                  end
-                end
-              end
-              
-              -- read-only rule summary
-              if ImGui.BeginTable("##ruleview", 3, _imgui.ImGuiTableFlags.SizingFixedFit) then
-                ImGui.TableSetupColumn("##rl", _imgui.ImGuiTableColumnFlags.WidthFixed, 130)
-                ImGui.TableSetupColumn("##ro", _imgui.ImGuiTableColumnFlags.WidthFixed, 50)
-                ImGui.TableSetupColumn("##rv", _imgui.ImGuiTableColumnFlags.WidthFixed, 90)
-                for ki, rule in ipairs(ruleSet.rules) do
-                  ImGui.PushID(ki)
-                  ImGui.TableNextRow()
-                  ImGui.TableSetColumnIndex(0)
-                  local label
-                  if rule.propType == "wieldReq" and type(rule.value) == "table" then
-                    local rv = rule.value
-                    label = string.format("Wield: %s[%d]", ({"Skill","Base Skill","Attribute","Base Attribute","Vital","Base Vital","Level","DONTUSE","DONTUSE","Training","Creature Type","Heritage" })[rv.reqType], rv.skillType)
-                  elseif rule.propType == "spells" then
-                    label = "Spell(s)"
-                  elseif rule.propKey then
-                    -- existing manifest label lookup
-                    label = rule.propKey or tostring(rule.propIdNum)
-                    for _, entry in ipairs(manifest.Manifest) do
-                      if rule.propKey and entry.propKey == rule.propKey then
-                        label = entry.label; break
-                      elseif rule.propIdNum and entry.propId then
-                        local n = type(entry.propId) == "number" and entry.propId
-                        or entry.propId.ToNumber and entry.propId:ToNumber()
-                        if n == rule.propIdNum then label = entry.label; break end
-                      end
-                    end
-                  else
-                    label = tostring(rule.propIdNum)
-                  end
-                  ImGui.Text(label)
-                  ImGui.TableSetColumnIndex(1); ImGui.Text(rule.op)
-                  local valueStr
-                  if rule.propType == "wieldReq" and type(rule.value) == "table" then
-                    valueStr = tostring(rule.value.difficulty)
-                  elseif type(rule.value) == "table" then
-                    local parts = {}
-                    local manifestEntry
-                    for _, e in ipairs(manifest.Manifest) do
-                      if e.propKey == rule.propKey then manifestEntry = e; break end
-                    end
-                    for _, v in ipairs(rule.value) do
-                      local label = manifestEntry and manifestEntry.enumTable and manifestEntry.enumTable[v] or tostring(v)
-                      table.insert(parts, tostring(label))
-                    end
-                    valueStr = table.concat(parts, " | ")
-                  else
-                    -- try to get human label for enum/flags values
-                    local manifestEntry
-                    for _, e in ipairs(manifest.Manifest) do
-                      if e.propKey == rule.propKey then manifestEntry = e; break end
-                    end
-                    if manifestEntry and manifestEntry.widget == "enum" and manifestEntry.enumTable then
-                      valueStr = tostring(manifestEntry.enumTable[tonumber(rule.value)] or rule.value)
-                    elseif manifestEntry and manifestEntry.widget == "flags" and manifestEntry.flagTable then
-                      local parts = {}
-                      local v = tonumber(rule.value) or 0
-                      for mask, label in pairs(manifestEntry.flagTable) do
-                        if bit.band(v, mask) ~= 0 then table.insert(parts, label) end
-                      end
-                      local sep = rule.op == "all" and " & " or " | "
-                      valueStr = #parts > 0 and table.concat(parts, sep) or "0"
-                    else
-                      local numVal = tonumber(rule.value)
-                      if numVal and math.floor(numVal) ~= numVal then
-                        valueStr = string.format("%.3f", numVal)
-                      else
-                        valueStr = tostring(rule.value)
-                      end
-                    end
-                  end
-                  ImGui.TableSetColumnIndex(2); ImGui.Text(valueStr)
-                  ImGui.PopID()
-                end
-                ImGui.EndTable()
-              end
-              
-              ImGui.Unindent()
-            end
-            
-            ImGui.EndGroup()
-            
-            -- border around the whole group
-            local rmin = ImGui.GetItemRectMin()
-            local rmax = ImGui.GetItemRectMax()
-            drawList.AddRect(
-            Vector2.new(ImGui.GetWindowPos().X - style.WindowPadding.X - pad.X, rmin.Y - pad.Y),
-            Vector2.new(ImGui.GetWindowPos().X + ImGui.GetWindowSize().X + pad.X, rmax.Y + pad.Y),
-            0x44FFFFFF, 3)
-            
-            ImGui.Spacing()
-            ImGui.PopID()
-          end
-          
-          if deletedRi then
-            table.remove(profile.ruleSets, deletedRi)
-            saveLootProfile()
-          end
-          
-          ImGui.Spacing()
-        end
-        ImGui.EndChild()
-      end
-    end
-
-  ---------------------------------------------------------------------------
-  -- Editor mode
-  ---------------------------------------------------------------------------
-  elseif UIState.mode == "editor" then
-
-    -- ── top bar ────────────────────────────────────────────────────────────
-    if navButton("Cancel", true) then
-      UIState.editingRuleSet = nil
-      UIState.mode           = UIState.editorReturnMode or "text"
-    end
-    ImGui.SameLine()
-    if navButton("Save Rule") then
-      if UIState.editingRuleSet then
-        -- overwrite existing ruleset in place
-        local rs = UIState.editingRuleSet.rs
-        rs.rules = {}
-        for _, row in ipairs(UIState.presentProps) do
-          table.insert(rs.rules, {
-            propType  = row.entry.propType,
-            propIdNum = row.entry.propId or nil,
-            propKey   = row.entry.propKey,
-            op        = row.op,
-            value     = row.value,
-          })
-        end
-        saveLootProfile()
-        UIState.editingRuleSet = nil
-      else
-        commitRuleToProfile(UIState)
-      end
-      UIState.mode = UIState.rulesReturnMode or "text"
-    end
-    ImGui.Separator()
-    
-    local displayName = UIState.editingRuleSet and UIState.editingRuleSet.rs.name or UIState.item and UIState.item.name or ""
-    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X)
-    local nameCh, nameVal = ImGui.InputText("##rulename", displayName, 128)
-    if nameCh then
-      if UIState.editingRuleSet then
-        UIState.editingRuleSet.rs.name = nameVal
-      elseif UIState.item then
-        UIState.item.name = nameVal
-      end
-    end
-    ImGui.Spacing()
-
-    -- ── editable rule rows ────────────────────────────────────────────────
-    if ImGui.BeginChild("##ruleTable") then
-      local toRemove = nil
-      if ImGui.BeginTable("##rules", 4, _imgui.ImGuiTableFlags.SizingFixedFit) then
-        setupRuleColumns()
-        for i, row in ipairs(UIState.presentProps) do
-          renderInlineRow(row, i)
-          if row._remove then toRemove = i end
-        end
-        ImGui.EndTable()
-      end
-
-      if toRemove then
-        local row = table.remove(UIState.presentProps, toRemove)
-        row._remove            = nil
-        UIState.filteredAbsent = nil  -- removed prop reappears in picker
-        table.insert(UIState.absentProps, row.entry)
-      end
-
-      -- ── add-property picker with search filter ────────────────────────────
-      ImGui.Spacing()
-      if #UIState.absentProps > 0 then
-        local fCh, fVal = ImGui.InputText("##propfilter", UIState.propFilter or "", 64)
-        if fCh then
-          UIState.propFilter     = fVal
-          UIState.filteredAbsent = nil
-        end
-
-        if UIState.filteredAbsent == nil then
-          UIState.filteredAbsent = {}
-          local filter = (UIState.propFilter or ""):lower()
-          for i, entry in ipairs(UIState.absentProps) do
-            if filter == "" or entry.label:lower():find(filter, 1, true) then
-              table.insert(UIState.filteredAbsent, { entry=entry, origIdx=i })
-            end
-          end
-          UIState.addComboIdx = 0
-        end
-
-        if #UIState.filteredAbsent > 0 then
-          local filteredLabels = {}
-          for _, item in ipairs(UIState.filteredAbsent) do
-            table.insert(filteredLabels, item.entry.label)
-          end
-          ImGui.SetNextItemWidth(200)
-          local ch, idx = ImGui.Combo("##addprop", UIState.addComboIdx, filteredLabels, #filteredLabels)
-          if ch then UIState.addComboIdx = idx end
-          ImGui.SameLine()
-          if ImGui.Button("+ Add") then
-            local selected = UIState.filteredAbsent[UIState.addComboIdx + 1]
-            if selected then
-              table.remove(UIState.absentProps, selected.origIdx)
-              table.insert(UIState.presentProps, {
-                entry = selected.entry,
-                value = selected.entry.default,
-                op    = selected.entry.ops[1],
-              })
-              UIState.addComboIdx    = 0
-              UIState.propFilter     = ""
-              UIState.filteredAbsent = nil
-            end
-          end
-        else
-          ImGui.TextDisabled("No properties match filter.")
-        end
-      end
-    end
-    ImGui.EndChild()
-  elseif UIState.mode == "test" then
-    if navButton("Back", true) then 
-      UIState.mode = UIState.rulesReturnMode or "none"
-    end
-    ImGui.Separator()
-
-    if not UIState.item then
-      ImGui.TextDisabled("No item inspected.")
-    else
-      ImGui.Text(UIState.item.name .. "  [" .. UIState.category .. "]")
-      ImGui.Spacing()
-
-      local matched = false
-      for _, profile in ipairs(activeProfiles) do
-        local profileLabel = (profile.active and "* " or "  ") .. profile.name
-        if ImGui.CollapsingHeader(profileLabel) then
-          if ImGui.BeginTable("##testresults", 2, _imgui.ImGuiTableFlags.SizingFixedFit) then
-            ImGui.TableSetupColumn("##rsname", _imgui.ImGuiTableColumnFlags.WidthStretch)
-            ImGui.TableSetupColumn("##rsresult", _imgui.ImGuiTableColumnFlags.WidthFixed, 200)
-            for _, ruleSet in ipairs(profile.ruleSets) do
-              ImGui.TableNextRow()
-              ImGui.TableSetColumnIndex(0)
-              ImGui.Text(ruleSet.name or "?")
-              ImGui.TableSetColumnIndex(1)
-              if not ruleSet.enabled then
-                ImGui.TextDisabled("off")
-              else
-                local pass = true
-                local failRule = nil
-                for _, rule in ipairs(ruleSet.rules) do
-                  if not evalRule(rule, UIState.item) then
-                    pass = false
-                    failRule = rule
-                    break
-                  end
-                end
-
-                if pass then
-                  ImGui.PushStyleColor(_imgui.ImGuiCol.Text, Vector4.new(0.3, 1.0, 0.3, 1.0))
-                  ImGui.Text("MATCH")
-                  ImGui.PopStyleColor()
-                  matched = true
-                else
-                  ImGui.PushStyleColor(_imgui.ImGuiCol.Text, Vector4.new(1.0, 0.4, 0.4, 1.0))
-                  ImGui.Text("no")
-                  ImGui.PopStyleColor()
-                  if failRule then
-                    local failLabel = failRule.propKey or failRule.propType or "?"
-                    -- try to get the human label from manifest
-                    for _, entry in ipairs(manifest.Manifest) do
-                      if entry.propKey and entry.propKey == failRule.propKey then
-                        failLabel = entry.label; break
-                      end
-                    end
-                    ImGui.SameLine()
-                    ImGui.PushStyleColor(_imgui.ImGuiCol.Text, Vector4.new(1.0, 0.7, 0.3, 1.0))
-                    ImGui.TextWrapped(failLabel .. " " .. tostring(failRule.op) .. " " .. tostring(failRule.value))
-                    ImGui.PopStyleColor()
-                  end
-                end
-              end
-            end
-            ImGui.EndTable()
-          end
-        end
-      end
-
-      ImGui.Spacing()
-      ImGui.Separator()
-      if matched then
-        ImGui.PushStyleColor(_imgui.ImGuiCol.Text, Vector4.new(0.3, 1.0, 0.3, 1.0))
-        ImGui.Text("Would be looted.")
-        ImGui.PopStyleColor()
-      else
-        ImGui.PushStyleColor(_imgui.ImGuiCol.Text, Vector4.new(1.0, 0.4, 0.4, 1.0))
-        ImGui.Text("Would NOT be looted.")
-        ImGui.PopStyleColor()
-      end
-    end
+  if     UIState.mode == "none"   then renderNoneMode()
+  elseif UIState.mode == "text"   then renderTextMode()
+  elseif UIState.mode == "rules"  then renderRulesMode()
+  elseif UIState.mode == "editor" then renderEditorMode()
+  elseif UIState.mode == "test"   then renderTestMode()
   end
 end)
