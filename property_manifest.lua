@@ -1,7 +1,7 @@
 -- property_manifest.lua
 -- Merges base and daralet manifests, exposes forCategory() and probeEntry().
 
-local Base    = require("manifest_base")
+local Base    = require("manifest")
 local server = require("manifest_" .. game.ServerName)
 local C       = require("item_category").Category
 
@@ -95,4 +95,5 @@ return {
   forCategory = forCategory,
   probeEntry  = probeEntry,
   _additionalProperties = _additionalProperties
+
 }
