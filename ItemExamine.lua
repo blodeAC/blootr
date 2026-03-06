@@ -358,6 +358,102 @@ local function pseudo_LockpickSuccessPercentToString(resistance)
   elseif lr < 95  then return "easy"
   else return "trivial" end
 end
+---@type table
+StringToMaterialType = setmetatable({
+  ["Unknown"] = MaterialType.Ceramic.ToNumber()-1,
+  ["Ceramic"] = MaterialType.Ceramic.ToNumber(),
+  ["Porcelain"] = MaterialType.Porcelain.ToNumber(),
+  ["Cloth"] = MaterialType.Porcelain.ToNumber()+1,
+  ["Linen"] = MaterialType.Linen.ToNumber(),
+  ["Satin"] = MaterialType.Satin.ToNumber(),
+  ["Silk"] = MaterialType.Silk.ToNumber(),
+  ["Velvet"] = MaterialType.Velvet.ToNumber(),
+  ["Wool"] = MaterialType.Wool.ToNumber(),
+  ["Gem"] = MaterialType.Wool.ToNumber()+1,
+  ["Agate"] = MaterialType.Agate.ToNumber(),
+  ["Amber"] = MaterialType.Amber.ToNumber(),
+  ["Amethyst"] = MaterialType.Amethyst.ToNumber(),
+  ["Aquamarine"] = MaterialType.Aquamarine.ToNumber(),
+  ["Azurite"] = MaterialType.Azurite.ToNumber(),
+  ["Black Garnet"] = MaterialType.BlackGarnet.ToNumber(),
+  ["Black Opal"] = MaterialType.BlackOpal.ToNumber(),
+  ["Bloodstone"] = MaterialType.Bloodstone.ToNumber(),
+  ["Carnelian"] = MaterialType.Carnelian.ToNumber(),
+  ["Citrine"] = MaterialType.Citrine.ToNumber(),
+  ["Diamond"] = MaterialType.Diamond.ToNumber(),
+  ["Emerald"] = MaterialType.Emerald.ToNumber(),
+  ["Fire Opal"] = MaterialType.FireOpal.ToNumber(),
+  ["Green Garnet"] = MaterialType.GreenGarnet.ToNumber(),
+  ["Green Jade"] = MaterialType.GreenJade.ToNumber(),
+  ["Hematite"] = MaterialType.Hematite.ToNumber(),
+  ["Imperial Topaz"] = MaterialType.ImperialTopaz.ToNumber(),
+  ["Jet"] = MaterialType.Jet.ToNumber(),
+  ["Lapis Lazuli"] = MaterialType.LapisLazuli.ToNumber(),
+  ["Lavender Jade"] = MaterialType.LavenderJade.ToNumber(),
+  ["Malachite"] = MaterialType.Malachite.ToNumber(),
+  ["Moonstone"] = MaterialType.Moonstone.ToNumber(),
+  ["Onyx"] = MaterialType.Onyx.ToNumber(),
+  ["Opal"] = MaterialType.Opal.ToNumber(),
+  ["Peridot"] = MaterialType.Peridot.ToNumber(),
+  ["Red Garnet"] = MaterialType.RedGarnet.ToNumber(),
+  ["Red Jade"] = MaterialType.RedJade.ToNumber(),
+  ["Rose Quartz"] = MaterialType.RoseQuartz.ToNumber(),
+  ["Ruby"] = MaterialType.Ruby.ToNumber(),
+  ["Sapphire"] = MaterialType.Sapphire.ToNumber(),
+  ["Smokey Quartz"] = MaterialType.SmokeyQuartz.ToNumber(),
+  ["Sunstone"] = MaterialType.Sunstone.ToNumber(),
+  ["Tiger Eye"] = MaterialType.TigerEye.ToNumber(),
+  ["Tourmaline"] = MaterialType.Tourmaline.ToNumber(),
+  ["Turquoise"] = MaterialType.Turquoise.ToNumber(),
+  ["White Jade"] = MaterialType.WhiteJade.ToNumber(),
+  ["White Quartz"] = MaterialType.WhiteQuartz.ToNumber(),
+  ["White Sapphire"] = MaterialType.WhiteSapphire.ToNumber(),
+  ["Yellow Garnet"] = MaterialType.YellowGarnet.ToNumber(),
+  ["Yellow Topaz"] = MaterialType.YellowTopaz.ToNumber(),
+  ["Zircon"] = MaterialType.Zircon.ToNumber(),
+  ["Ivory"] = MaterialType.Ivory.ToNumber(),
+  ["Leather"] = MaterialType.Leather.ToNumber(),
+  ["Armoredillo Hide"] = MaterialType.ArmoredilloHide.ToNumber(),
+  ["Gromnie Hide"] = MaterialType.GromnieHide.ToNumber(),
+  ["Reed Shark Hide"] = MaterialType.ReedSharkHide.ToNumber(),
+  ["Metal"] = MaterialType.ReedSharkHide.ToNumber()+1,
+  ["Brass"] = MaterialType.Brass.ToNumber(),
+  ["Bronze"] = MaterialType.Bronze.ToNumber(),
+  ["Copper"] = MaterialType.Copper.ToNumber(),
+  ["Gold"] = MaterialType.Gold.ToNumber(),
+  ["Iron"] = MaterialType.Iron.ToNumber(),
+  ["Pyreal"] = MaterialType.Pyreal.ToNumber(),
+  ["Silver"] = MaterialType.Silver.ToNumber(),
+  ["Steel"] = MaterialType.Steel.ToNumber(),
+  ["Stone"] = MaterialType.Steel.ToNumber()+1,
+  ["Alabaster"] = MaterialType.Alabaster.ToNumber(),
+  ["Granite"] = MaterialType.Granite.ToNumber(),
+  ["Marble"] = MaterialType.Marble.ToNumber(),
+  ["Obsidian"] = MaterialType.Obsidian.ToNumber(),
+  ["Sandstone"] = MaterialType.Sandstone.ToNumber(),
+  ["Serpentine"] = MaterialType.Serpentine.ToNumber(),
+  ["Wood"] = MaterialType.Serpentine.ToNumber()+1,
+  ["Ebony"] = MaterialType.Ebony.ToNumber(),
+  ["Mahogany"] = MaterialType.Mahogany.ToNumber(),
+  ["Oak"] = MaterialType.Oak.ToNumber(),
+  ["Pine"] = MaterialType.Pine.ToNumber(),
+  ["Teak"] = MaterialType.Teak.ToNumber()
+}, {
+  __index = function(src, key)
+    if type(key) == "number" then
+      -- reverse: name -> id
+      for k, v in pairs(src) do
+        if v == key then
+          return k
+        end
+      end
+    elseif type(key) == "key" then
+      -- direct: id -> name
+      return rawget(src, key)
+    end
+    return nil
+  end
+})
 
 ----------------------------------------------------------------------
 -- Set names (from Appraisal_ShowSet switch, trimmed to needed cases) [file:1]
@@ -427,6 +523,7 @@ function ItemExamine.new(itemData)
   
   self.lines = {}
   
+  self:ShowName()
   self:ShowValueInfo()
   self:ShowBurdenInfo()
   self:ShowTinkeringInfo()
@@ -535,6 +632,18 @@ end
 ----------------------------------------------------------------------
 -- Appraisal_* methods (trimmed where IDs are TODO) [file:1]
 ----------------------------------------------------------------------
+function ItemExamine:ShowName()
+  local materialString = ""
+  local okM, material = InqInt(self.item, IntId.MaterialType)
+  if okM then
+    materialString = StringToMaterialType[material] .. " "
+  end
+  local okN, name = InqString(self.item, StringId.Name)
+  if okN then
+    self:Add(materialString .. name)
+  end
+end
+
 function ItemExamine:ShowValueInfo()
   local ok, val = InqInt(self.item, IntId.Value)
   if ok then
