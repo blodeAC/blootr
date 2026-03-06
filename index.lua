@@ -261,7 +261,7 @@ local function scanInventory()
     return
   end
   for _, invItem in ipairs(game.Character.Equipment) do
-    if not invItem.HasAppraisalData then
+    if not invItem.HasAppraisalData or AppraiseInfo[invItem.Id]==nil then
       await(game.Actions.ObjectAppraise(invItem.Id))
     end
   end
