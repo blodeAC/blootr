@@ -1,8 +1,6 @@
 -- ItemExamine.lua
 -- Trimmed but complete appraisal logic for your Lua itemData structure. [file:1]
 
----todo: implement SLAYER ENUM
-
 local bit = require("bit")  -- adjust if you use a different bit lib
 
 local ItemExamine = {}
@@ -512,11 +510,37 @@ local serverLogic = require("ItemExamine_" .. game.ServerName)
 
 function ItemExamine.new(itemData)
   local self = setmetatable({}, ItemExamine)
-  if serverLogic~=nil then
-    itemData.StringValues.Use = nil
-    itemData.StringValues.LongDesc = nil
+  if serverLogic~=nil then          -- this is daralet specific, really. needs to move to a preprocessor or something
+    if not itemData.IntValues["TrophyQuality"] then
+      itemData.StringValues.Use = nil
+    end
+    if itemData.StringValues["LongDesc"]~=nil then
+      local lastLine = itemData.StringValues.LongDesc:match("[^\n]+$")  -- last non-empty line
+      if lastLine and lastLine:sub(1,1) ~= "~" then
+        itemData.StringValues["LongDesc"] = lastLine .. "\n"
+      else
+        itemData.StringValues["LongDesc"] = nil
+      end
+    end
+    
     local ex = serverLogic.new(itemData)
     self.item  = ex.item
+
+    local lines = {}
+    if self.item.StringValues["LongDesc"]~=nil then
+      for line in self.item.StringValues["LongDesc"]:gmatch("[^\n]+") do   -- keeps from repeated decoration. i don't know how it's coming back
+        table.insert(lines, line)
+      end
+
+      local secondLast = lines[#lines - 1]
+      if secondLast == lines[#lines] then
+        lines[#lines-1] = ""
+        itemData.StringValues["LongDesc"] = ""
+        for _, line in ipairs(lines) do
+          itemData.StringValues["LongDesc"] =  itemData.StringValues["LongDesc"] .. "\n" .. line
+        end
+      end
+    end
   else
     self.item = itemData
   end
@@ -972,7 +996,7 @@ function ItemExamine:ShowArmorMods()
       nether = DamageResistanceToString(1024, armorLevel, netherMod)
     end
     if nether ~= "" then self:Add(nether) end
-    self:Add("")
+    --self:Add("")
   end
 end
 
@@ -1095,7 +1119,6 @@ function ItemExamine:ShowSpecialProperties()
   
   if #props > 0 then
     self:Add("Properties: " .. table.concat(props, ", "))
-    self:Add("")
   end
   if imbuedCheck ~= 0 then
     self:Add("This item cannot be further imbued.")
@@ -1490,7 +1513,7 @@ function ItemExamine:ShowMagicInfo()
     for _,spellInfo in ipairs(self.item.spellsInfo or {}) do
       self:Add(string.format("~ %s: %s",spellInfo.name,spellInfo.desc or ""))
     end
-    self:Add("")
+    --self:Add("")
   end
 end
 
