@@ -255,7 +255,7 @@ M.weapon = {
     propType = "IntValues",   propKey   = "Damage",
     widget   = "int",        ops      = {">=","<=",">","<","=="},
     default  = 0,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE },
   },
   {
     label    = "Damage Type",
@@ -273,7 +273,7 @@ M.weapon = {
       [0x400]="Nether",
     },
     ops      = {"OR","AND"},
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND}
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND}
   },  
   {
     label    = "Attack Bonus",
@@ -281,7 +281,7 @@ M.weapon = {
     propType = "FloatValues", propKey   = "WeaponOffense",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND },
   },
   {
     label    = "Melee Defense Bonus",
@@ -289,7 +289,7 @@ M.weapon = {
     propType = "FloatValues", propKey   = "WeaponDefense",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND },
   },
   {
     label    = "Missile Defense Bonus",
@@ -297,7 +297,7 @@ M.weapon = {
     propType = "FloatValues", propKey   = "WeaponMissileDefense",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND },
   },
   {
     label    = "Magic Defense Bonus",
@@ -305,7 +305,7 @@ M.weapon = {
     propType = "FloatValues", propKey   = "WeaponMagicDefense",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND },
   },
   {
     label    = "Elemental Damage Bonus",
@@ -313,7 +313,7 @@ M.weapon = {
     propType = "IntValues",   propKey   = "ElementalDamageBonus",
     widget   = "int",        ops      = {">=",">","=="},
     default  = 0,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE },
   },
   {
     label    = "Damage Modifier",
@@ -321,7 +321,7 @@ M.weapon = {
     propType = "FloatValues", propKey   = "DamageMod",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
-    categories = { C.WEAPON_MISSILE },
+    categories = "*", --{ C.WEAPON_MISSILE },
   },
   {
     label    = "Weapon Speed",
@@ -329,7 +329,7 @@ M.weapon = {
     propType = "IntValues",   propKey   = "WeaponTime",
     widget   = "int",        ops      = {"<=","<","=="},   -- lower = faster
     default  = 50,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE },
   },
   {
     label    = "Critical Multiplier",   -- Crushing Blow
@@ -337,7 +337,7 @@ M.weapon = {
     propType = "FloatValues", propKey   = "CriticalMultiplier",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE },
   },
   {
     label    = "Critical Frequency",    -- Biting Strike
@@ -345,7 +345,7 @@ M.weapon = {
     propType = "FloatValues", propKey   = "CriticalFrequency",
     widget   = "float",      ops      = {">=",">"},
     default  = 0.1,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE },
   },
   {
     label    = "Armor Cleaving",
@@ -353,7 +353,7 @@ M.weapon = {
     propType = "FloatValues", propKey   = "IgnoreArmor",
     widget   = "float",      ops      = {"<=","<"},   -- lower = ignores more
     default  = 1.0,
-    categories = { C.WEAPON_MELEE, C.WEAPON_MISSILE },
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE },
   },
 }
 
@@ -366,7 +366,7 @@ M.wand = {
     propType = "FloatValues", propKey   = "ManaConversionMod",
     widget   = "float",      ops      = {">=",">"},
     default  = 0.0,
-    categories = { C.WEAPON_WAND },
+    categories = "*", --{ C.WEAPON_WAND },
   },
   {
     label    = "Elemental Damage Mod",
@@ -374,7 +374,7 @@ M.wand = {
     propType = "FloatValues", propKey   = "ElementalDamageMod",
     widget   = "float",      ops      = {">=",">"},
     default  = 0.0,
-    categories = { C.WEAPON_WAND },
+    categories = "*", --{ C.WEAPON_WAND },
   },
 }
 
@@ -387,7 +387,7 @@ M.armor = {
     propType = "IntValues",   propKey   = "ArmorLevel",
     widget   = "int",        ops      = {">=","<=",">","<","=="},
     default  = 0,
-    categories = { C.ARMOR },
+    categories = "*", --{ C.ARMOR },
   },
   {
     label    = "AL vs Slash",
@@ -395,7 +395,7 @@ M.armor = {
     propType = "FloatValues", propKey  = "ArmorModVsSlash",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
-    categories = { C.ARMOR },
+    categories = "*", --{ C.ARMOR },
   },
   {
     label    = "AL vs Pierce",
@@ -403,7 +403,7 @@ M.armor = {
     propType = "FloatValues", propKey   = "ArmorModVsPierce",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
-    categories = { C.ARMOR },
+    categories = "*", --{ C.ARMOR },
   },
   {
     label    = "AL vs Bludgeon",
@@ -411,7 +411,7 @@ M.armor = {
     propType = "FloatValues", propKey   = "ArmorModVsBludgeon",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
-    categories = { C.ARMOR },
+    categories = "*", --{ C.ARMOR },
   },
   {
     label    = "AL vs Fire",
@@ -419,7 +419,7 @@ M.armor = {
     propType = "FloatValues", propKey   = "ArmorModVsFire",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
-    categories = { C.ARMOR },
+    categories = "*", --{ C.ARMOR },
   },
   {
     label    = "AL vs Cold",
@@ -427,7 +427,7 @@ M.armor = {
     propType = "FloatValues", propKey   = "ArmorModVsCold",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
-    categories = { C.ARMOR },
+    categories = "*", --{ C.ARMOR },
   },
   {
     label    = "AL vs Acid",
@@ -435,7 +435,7 @@ M.armor = {
     propType = "FloatValues", propKey   = "ArmorModVsAcid",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
-    categories = { C.ARMOR },
+    categories = "*", --{ C.ARMOR },
   },
   {
     label    = "AL vs Electric",
@@ -443,7 +443,7 @@ M.armor = {
     propType = "FloatValues", propKey   = "ArmorModVsElectric",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
-    categories = { C.ARMOR },
+    categories = "*", --{ C.ARMOR },
   },
   {
     label    = "AL vs Nether",
@@ -451,7 +451,7 @@ M.armor = {
     propType = "FloatValues", propKey   = "ArmorModVsNether",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
-    categories = { C.ARMOR },
+    categories = "*", --{ C.ARMOR },
   },
 }
 
