@@ -95,5 +95,4 @@ return {
   forCategory = forCategory,
   probeEntry  = probeEntry,
   _additionalProperties = _additionalProperties
-
 }
