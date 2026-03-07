@@ -72,7 +72,7 @@ function ItemExamine_Daralet.new(itemData)
   self._longDescAdditions                       = nil
   self._additionalPropertiesLongDescriptionsText = nil
   self._extraPropertiesText                     = nil
-
+  
   self.equippedItemsRatingCache = {}
   for _, property in pairs(RATING_PROPERTIES) do
     self.equippedItemsRatingCache[property] = 0
@@ -83,6 +83,18 @@ function ItemExamine_Daralet.new(itemData)
   end
   self.equippedItems = {}
   self.lines = {}
+
+  if self.item.StringValues["Use"] and not self.item.StringValues["Use"]:match("Quality Level:") and (self.item.StringValues["Use"]:match(":") or self.item.StringValues["Use"]:match("\t"))  then
+    self.item.StringValues.Use = nil
+  end
+  if self.item.StringValues["LongDesc"]~=nil then
+    local lastLine = self.item.StringValues.LongDesc:match("[^\n]+$")  -- last non-empty line
+    if lastLine and lastLine:sub(1,1) ~= "~" then
+      self.item.StringValues["LongDesc"] = lastLine .. "\n"
+    else
+      self.item.StringValues["LongDesc"] = nil
+    end
+  end
 
   self:SetTinkeringLongText()
 
@@ -224,7 +236,7 @@ function ItemExamine_Daralet.new(itemData)
         "Property Descriptions:\n" .. (self._additionalPropertiesLongDescriptionsText or "") ..
         "\n\n" .. (longDescString or "")
       self.item.StringValues["LongDesc"] =
-        self._additionalPropertiesLongDescriptionsText .. (self.item.StringValues["LongDesc"] or "")
+        self._additionalPropertiesLongDescriptionsText
     end
   end
 
