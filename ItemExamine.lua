@@ -511,7 +511,7 @@ local serverLogic = require("ItemExamine_" .. game.ServerName)
 function ItemExamine.new(itemData)
   local self = setmetatable({}, ItemExamine)
   if serverLogic~=nil then          -- this is daralet specific, really. needs to move to a preprocessor or something
-    if not itemData.IntValues["TrophyQuality"] then
+    if itemData.objectClass~=ObjectClass.Misc or itemData.IntValues["JewelQuality"] then
       itemData.StringValues.Use = nil
     end
     if itemData.StringValues["LongDesc"]~=nil then
@@ -1240,6 +1240,42 @@ function ItemExamine:ShowWieldRequirements()
       if okR and okS and okD then helper(r, s, d) end
     end
   end
+  okReq, iReq   = InqInt(self.item, IntId.WieldRequirements3)
+  okSkill, iSk  = InqInt(self.item, IntId.WieldSkilltype3)
+  okDiff, iDiff = InqInt(self.item, IntId.WieldDifficulty3)
+  if okReq and okSkill and okDiff then
+    helper(iReq, iSk, iDiff)
+  else
+    local ids = {
+      {0x10E,0x10F,0x110},
+      {0x111,0x112,0x113},
+      {0x114,0x115,0x116},
+    }
+    for _, t in ipairs(ids) do
+      local okR, r = InqInt(self.item, t[1])
+      local okS, s = InqInt(self.item, t[2])
+      local okD, d = InqInt(self.item, t[3])
+      if okR and okS and okD then helper(r, s, d) end
+    end
+  end
+  okReq, iReq   = InqInt(self.item, IntId.WieldRequirements4)
+  okSkill, iSk  = InqInt(self.item, IntId.WieldSkilltype4)
+  okDiff, iDiff = InqInt(self.item, IntId.WieldDifficulty4)
+  if okReq and okSkill and okDiff then
+    helper(iReq, iSk, iDiff)
+  else
+    local ids = {
+      {0x10E,0x10F,0x110},
+      {0x111,0x112,0x113},
+      {0x114,0x115,0x116},
+    }
+    for _, t in ipairs(ids) do
+      local okR, r = InqInt(self.item, t[1])
+      local okS, s = InqInt(self.item, t[2])
+      local okD, d = InqInt(self.item, t[3])
+      if okR and okS and okD then helper(r, s, d) end
+    end
+  end  
 end
 
 function ItemExamine:ShowUsageLimitInfo()
