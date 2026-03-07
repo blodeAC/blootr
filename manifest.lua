@@ -13,14 +13,12 @@ local M = {}
 M.universal = {
   {
     label    = "Name",
-    pretext  = "Name: ",   posttext = "",
     propType = "StringValues",  propKey   = "Name",
     widget   = "string",       ops      = {"Regex ->"},
     default  = "",           categories = "*",
   },
   {
     label    = "Material",
-    pretext  = "Material: ",   posttext = "",
     propType = "IntValue",  propKey   = "MaterialType",
     widget   = "enum",       ops      = {">=","<=",">","<","=="},
     enumTable = {
@@ -57,21 +55,18 @@ M.universal = {
   },
   {
     label    = "Value",
-    pretext  = "Value: ",   posttext = "",
     propType = "IntValues",  propKey   = "Value",
     widget   = "int",       ops      = {">=","<=",">","<","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Burden",
-    pretext  = "Burden: ",  posttext = "",
     propType = "IntValues",  propKey   = "EncumbranceVal",
     widget   = "int",       ops      = {">=","<=",">","<"},
     default  = 0,           categories = "*",
   },
   {
     label    = "Workmanship",
-    pretext  = "Workmanship: ",  posttext = "",
     propType = "IntValues",       propKey   = "ItemWorkmanship",
     widget   = "enum",
     enumTable = {
@@ -84,14 +79,12 @@ M.universal = {
   },
   {
     label    = "Times Tinkered",
-    pretext  = "This item has been tinkered ",  posttext = " times.",
     propType = "IntValues",  propKey   = "NumTimesTinkered",
     widget   = "int",       ops      = {"==",">=","<="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Equipment Set",
-    pretext  = "Set: ",  posttext = "",
     propType = "IntValues",  propKey = "EquipmentSetId",
     widget   = "enumset",    
     enumTable = SetNames or {},
@@ -99,73 +92,63 @@ M.universal = {
     default  = 1,        categories = "*",
   },
 
-  -- Ratings (all universal, only present if > 0)
+  -- Ratings
   {
     label    = "Damage Rating",
-    pretext  = "Dam ",      posttext = "",
     propType = "IntValues",  propKey   = "GearDamage",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Damage Resist Rating",
-    pretext  = "Dam Resist ", posttext = "",
     propType = "IntValues",  propKey   = "GearDamageResist",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Crit Rating",
-    pretext  = "Crit ",     posttext = "",
     propType = "IntValues",  propKey   = "GearCrit",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Crit Damage Rating",
-    pretext  = "Crit Dam ", posttext = "",
     propType = "IntValues",  propKey   = "GearCritDamage",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Crit Resist Rating",
-    pretext  = "Crit Resist ", posttext = "",
     propType = "IntValues",  propKey   = "GearCritResist",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Crit Damage Resist Rating",
-    pretext  = "Crit Dam Resist ", posttext = "",
     propType = "IntValues",  propKey   = "GearCritDamageResist",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Healing Boost Rating",
-    pretext  = "Heal Boost ", posttext = "",
     propType = "IntValues",  propKey   = "GearHealingBoost",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Nether Resist Rating",
-    pretext  = "Nether Resist ", posttext = "",
     propType = "IntValues",  propKey   = "GearNetherResist",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Life Resist Rating",
-    pretext  = "Life Resist ", posttext = "",
     propType = "IntValues",  propKey   = "GearLifeResist",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Vitality",
-    pretext  = "This item adds ", posttext = " Vitality.",
     propType = "IntValues",  propKey   = "GearMaxHealth",
     widget   = "int",       ops      = {">=",">","=="},
     default  = 0,           categories = "*",
@@ -174,7 +157,6 @@ M.universal = {
   -- Spells
   {
     label    = "Spell(s)",
-    pretext  = "Spells contain: ", posttext = "",
     propType = "spells",  propId   = nil,
     widget   = "string",    ops      = {"Regex ->"},
     default  = "",          categories = "*",
@@ -194,14 +176,12 @@ M.universal = {
   -- Level limits
   {
     label    = "Min Level",
-    pretext  = "Min Level: ",  posttext = "",
     propType = "IntValues",  propKey   = "MinLevel",
     widget   = "int",       ops      = {"<=","=="},
     default  = 0,           categories = "*",
   },
   {
     label    = "Max Level",
-    pretext  = "Max Level: ",  posttext = "",
     propType = "IntValues",  propKey   = "MaxLevel",
     widget   = "int",       ops      = {">=","=="},
     default  = 0,           categories = "*",
@@ -210,28 +190,24 @@ M.universal = {
   -- Special properties (booleans)
   {
     label    = "Attuned",
-    pretext  = "Attuned: ",  posttext = "",
     propType = "IntValues",   propKey   = "Attuned",
     widget   = "int",        ops      = {"=="},
     default  = 1,            categories = "*",
   },
   {
     label    = "Bonded",
-    pretext  = "Bonded: ",   posttext = "",
     propType = "IntValues",   propKey   = "Bonded",
     widget   = "int",        ops      = {"=="},
     default  = 1,            categories = "*",
   },
   {
     label    = "Unenchantable",
-    pretext  = "Unenchantable (ResistMagic >= 9999)", posttext = "",
     propType = "IntValues",   propKey   = "ResistMagic",
     widget   = "int",        ops      = {">="},
     default  = 9999,         categories = "*",
   },
   {
     label    = "Imbued Effect",
-    pretext  = "Imbued: ",   posttext = "",
     propType = "IntValues",   propKey   = "ImbuedEffect",
     widget   = "flags",
     flagTable = {
@@ -251,15 +227,20 @@ M.universal = {
 M.weapon = {
   {
     label    = "Damage",
-    pretext  = "Damage: ",   posttext = "",
     propType = "IntValues",   propKey   = "Damage",
     widget   = "int",        ops      = {">=","<=",">","<","=="},
     default  = 0,
     categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE },
   },
   {
+    label    = "Variance",
+    propType = "FloatValues",   propKey   = "DamageVariance",
+    widget   = "float",        ops      = {">=","<=",">","<","=="},
+    default  = 0.0,
+    categories = "*", --{ C.WEAPON_MELEE },
+  },
+  {
     label    = "Damage Type",
-    pretext  = "Damage Type: ",   posttext = "",
     propType = "IntValues",   propKey   = "DamageType",
     widget   = "flags",
     flagTable = {
@@ -274,10 +255,16 @@ M.weapon = {
     },
     ops      = {"OR","AND"},
     categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND}
-  },  
+  },
+  {
+    label    = "Weapon Speed",
+    propType = "IntValues",   propKey   = "WeaponTime",
+    widget   = "int",        ops      = {"<=","<","=="},   -- lower = faster
+    default  = 50,
+    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE },
+  },
   {
     label    = "Attack Bonus",
-    pretext  = "Bonus to Attack Skill: ",  posttext = "%%.",
     propType = "FloatValues", propKey   = "WeaponOffense",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
@@ -285,7 +272,6 @@ M.weapon = {
   },
   {
     label    = "Melee Defense Bonus",
-    pretext  = "Bonus to Melee Defense: ", posttext = "%%.",
     propType = "FloatValues", propKey   = "WeaponDefense",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
@@ -293,7 +279,6 @@ M.weapon = {
   },
   {
     label    = "Missile Defense Bonus",
-    pretext  = "Bonus to Missile Defense: ", posttext = "%%.",
     propType = "FloatValues", propKey   = "WeaponMissileDefense",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
@@ -301,7 +286,6 @@ M.weapon = {
   },
   {
     label    = "Magic Defense Bonus",
-    pretext  = "Bonus to Magic Defense: ", posttext = "%%.",
     propType = "FloatValues", propKey   = "WeaponMagicDefense",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
@@ -309,7 +293,6 @@ M.weapon = {
   },
   {
     label    = "Elemental Damage Bonus",
-    pretext  = "Elemental Damage Bonus: ", posttext = "",
     propType = "IntValues",   propKey   = "ElementalDamageBonus",
     widget   = "int",        ops      = {">=",">","=="},
     default  = 0,
@@ -317,23 +300,13 @@ M.weapon = {
   },
   {
     label    = "Damage Modifier",
-    pretext  = "Damage Modifier: ",  posttext = "",
     propType = "FloatValues", propKey   = "DamageMod",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
     categories = "*", --{ C.WEAPON_MISSILE },
   },
   {
-    label    = "Weapon Speed",
-    pretext  = "Speed: ",    posttext = "",
-    propType = "IntValues",   propKey   = "WeaponTime",
-    widget   = "int",        ops      = {"<=","<","=="},   -- lower = faster
-    default  = 50,
-    categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE },
-  },
-  {
     label    = "Critical Multiplier",   -- Crushing Blow
-    pretext  = "Critical Multiplier: ", posttext = "",
     propType = "FloatValues", propKey   = "CriticalMultiplier",
     widget   = "float",      ops      = {">=",">"},
     default  = 1.0,
@@ -341,7 +314,6 @@ M.weapon = {
   },
   {
     label    = "Critical Frequency",    -- Biting Strike
-    pretext  = "Critical Chance: ",     posttext = "",
     propType = "FloatValues", propKey   = "CriticalFrequency",
     widget   = "float",      ops      = {">=",">"},
     default  = 0.1,
@@ -349,7 +321,6 @@ M.weapon = {
   },
   {
     label    = "Armor Cleaving",
-    pretext  = "Ignore Armor: ",  posttext = "",
     propType = "FloatValues", propKey   = "IgnoreArmor",
     widget   = "float",      ops      = {"<=","<"},   -- lower = ignores more
     default  = 1.0,
@@ -362,7 +333,6 @@ M.weapon = {
 M.wand = {
   {
     label    = "Mana Conversion Bonus",
-    pretext  = "Bonus to Mana Conversion: ", posttext = "%%.",
     propType = "FloatValues", propKey   = "ManaConversionMod",
     widget   = "float",      ops      = {">=",">"},
     default  = 0.0,
@@ -370,7 +340,6 @@ M.wand = {
   },
   {
     label    = "Elemental Damage Mod",
-    pretext  = "Elemental Damage Mod: ",    posttext = "",
     propType = "FloatValues", propKey   = "ElementalDamageMod",
     widget   = "float",      ops      = {">=",">"},
     default  = 0.0,
@@ -383,7 +352,6 @@ M.wand = {
 M.armor = {
   {
     label    = "Armor Level",
-    pretext  = "Armor Level: ",  posttext = "",
     propType = "IntValues",   propKey   = "ArmorLevel",
     widget   = "int",        ops      = {">=","<=",">","<","=="},
     default  = 0,
@@ -391,7 +359,6 @@ M.armor = {
   },
   {
     label    = "AL vs Slash",
-    pretext  = "Slashing: ",     posttext = "",
     propType = "FloatValues", propKey  = "ArmorModVsSlash",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
@@ -399,7 +366,6 @@ M.armor = {
   },
   {
     label    = "AL vs Pierce",
-    pretext  = "Piercing: ",     posttext = "",
     propType = "FloatValues", propKey   = "ArmorModVsPierce",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
@@ -407,7 +373,6 @@ M.armor = {
   },
   {
     label    = "AL vs Bludgeon",
-    pretext  = "Bludgeoning: ",  posttext = "",
     propType = "FloatValues", propKey   = "ArmorModVsBludgeon",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
@@ -415,7 +380,6 @@ M.armor = {
   },
   {
     label    = "AL vs Fire",
-    pretext  = "Fire: ",         posttext = "",
     propType = "FloatValues", propKey   = "ArmorModVsFire",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
@@ -423,7 +387,6 @@ M.armor = {
   },
   {
     label    = "AL vs Cold",
-    pretext  = "Cold: ",         posttext = "",
     propType = "FloatValues", propKey   = "ArmorModVsCold",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
@@ -431,7 +394,6 @@ M.armor = {
   },
   {
     label    = "AL vs Acid",
-    pretext  = "Acid: ",         posttext = "",
     propType = "FloatValues", propKey   = "ArmorModVsAcid",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
@@ -439,7 +401,6 @@ M.armor = {
   },
   {
     label    = "AL vs Electric",
-    pretext  = "Electric: ",     posttext = "",
     propType = "FloatValues", propKey   = "ArmorModVsElectric",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
@@ -447,7 +408,6 @@ M.armor = {
   },
   {
     label    = "AL vs Nether",
-    pretext  = "Nether: ",       posttext = "",
     propType = "FloatValues", propKey   = "ArmorModVsNether",
     widget   = "float",      ops      = {">=",">","=="},
     default  = 0.0,
@@ -460,7 +420,6 @@ M.armor = {
 M.magic = {
   {
     label    = "Spellcraft",
-    pretext  = "Spellcraft: ",   posttext = ".",
     propType = "IntValues",   propKey   = "ItemSpellcraft",
     widget   = "int",        ops      = {">=","<=",">","<","=="},
     default  = 0,            categories = "*",
@@ -468,7 +427,6 @@ M.magic = {
   },
   {
     label    = "Max Mana",
-    pretext  = "Mana: ",         posttext = " / max",
     propType = "IntValues",   propKey   = "ItemMaxMana",
     widget   = "int",        ops      = {">=","<=","=="},
     default  = 0,            categories = "*",
