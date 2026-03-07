@@ -714,7 +714,7 @@ function ItemExamine_Daralet:GetJewelDescription(jewel)
 end
 
 local function GetSocketDescription(materialType, quality)
-  return string.format("\n  Socket: %s (%d)\n", StringToMaterialType[materialType], quality)
+  return string.format("\no  Socket: %s (%d)\n", StringToMaterialType[materialType], quality)
 end
 
 function ItemExamine_Daralet:SetJewelcraftingUseText()
@@ -742,7 +742,7 @@ function ItemExamine_Daralet:SetJewelcraftingUseText()
       end
 
       if not mat or mat < 1 or not q or q < 1 then
-        self._extraPropertiesText = (self._extraPropertiesText or "") .. "\n    Empty Jewel Socket\n\n"
+        self._extraPropertiesText = (self._extraPropertiesText or "") .. "\no  Empty Jewel Socket\n\n"
       else
         self._extraPropertiesText = (self._extraPropertiesText or "") .. GetSocketDescription(mat, q)
       end
