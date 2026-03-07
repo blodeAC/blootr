@@ -8,194 +8,265 @@ local M = {}
 
 -- ── Armor skill mods (ArmorXxxMod floats, IDs 20001–20023) ───────────────────
 M.armor_mods = {
-  { label="War Magic Bonus",       pretext="Bonus to War Magic Skill: +",    posttext="%%",
-    propKey="ArmorWarMagicMod",    propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Life Magic Bonus",      pretext="Bonus to Life Magic Skill: +",   posttext="%%",
-    propKey="ArmorLifeMagicMod",   propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Attack Bonus",          pretext="Bonus to Attack Skill: +",       posttext="%%",
-    propKey="ArmorAttackMod",      propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Physical Defense Bonus",pretext="Bonus to Physical Defense: +",   posttext="%%",
-    propKey="ArmorPhysicalDefMod", propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Magic Defense Bonus",   pretext="Bonus to Magic Defense: +",      posttext="%%",
-    propKey="ArmorMagicDefMod",    propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Dual Wield Bonus",      pretext="Bonus to Dual Wield Skill: +",   posttext="%%",
-    propKey="ArmorDualWieldMod",   propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Two-Handed Bonus",      pretext="Bonus to Two-handed Combat Skill: +", posttext="%%",
-    propKey="ArmorTwohandedCombatMod", propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Run Bonus",             pretext="Bonus to Run Skill: +",          posttext="%%",
-    propKey="ArmorRunMod",         propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Thievery Bonus",        pretext="Bonus to Thievery Skill: +",     posttext="%%",
-    propKey="ArmorThieveryMod",    propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Shield Bonus",          pretext="Bonus to Shield Skill: +",       posttext="%%",
-    propKey="ArmorShieldMod",      propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Perception Bonus",      pretext="Bonus to Perception Skill: +",   posttext="%%",
-    propKey="ArmorPerceptionMod",  propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Deception Bonus",       pretext="Bonus to Deception Skill: +",    posttext="%%",
-    propKey="ArmorDeceptionMod",   propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Max Health Bonus",      pretext="Bonus to Maximum Health: +",     posttext="%%",
-    propKey="ArmorHealthMod",      propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Health Regen Bonus",    pretext="Bonus to Health Regen: +",       posttext="%%",
-    propKey="ArmorHealthRegenMod", propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Max Stamina Bonus",     pretext="Bonus to Maximum Stamina: +",    posttext="%%",
-    propKey="ArmorStaminaMod",     propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Stamina Regen Bonus",   pretext="Bonus to Stamina Regen: +",      posttext="%%",
-    propKey="ArmorStaminaRegenMod",propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Max Mana Bonus",        pretext="Bonus to Maximum Mana: +",       posttext="%%",
-    propKey="ArmorManaMod",        propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Mana Regen Bonus",      pretext="Bonus to Mana Regen: +",         posttext="%%",
-    propKey="ArmorManaRegenMod",   propType="FloatValues",
-    widget="float", ops={">=",">"}, default=0.0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING }
-   },
-
-  { label="Ward Level",            pretext="Ward Level: ",                   posttext="",
-    propKey="WardLevel",           propType="IntValues",
-    widget="int", ops={">=","<=",">","<","=="}, default=0,
-    categories = "*", --{ C.ARMOR, C.JEWELRY }
-   },
-  
-  { label="Sockets",       pretext="Sockets: ",    posttext="%%",
-    propKey="JewelSockets",    propType="IntValues",
-    widget="int", ops={">=",">"}, default=0,
-    categories = "*", --{ C.ARMOR, C.CLOTHING, C.JEWELRY }
-   },
-
-  { label="Weight Class",          pretext="Weight Class: ",                 posttext="",
+  {
+    label="Weight Class",          
     propKey="ArmorWeightClass",    propType="IntValues",
     widget="enum",
     enumTable={ [1]="Cloth", [2]="Light", [4]="Heavy" },
     ops={">=","<=",">","<","=="}, default=2,
     categories = "*", --{ C.ARMOR }
-   },
-
-  { label="Resource Penalty",      pretext="Penalty to Stamina/Mana usage: ",posttext="%%",
+  },
+  {
+    label="War Magic Bonus",       
+    propKey="ArmorWarMagicMod",    propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Life Magic Bonus",      
+    propKey="ArmorLifeMagicMod",   propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Attack Bonus",          
+    propKey="ArmorAttackMod",      propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Physical Defense Bonus",
+    propKey="ArmorPhysicalDefMod", propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Magic Defense Bonus",   
+    propKey="ArmorMagicDefMod",    propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Dual Wield Bonus",      
+    propKey="ArmorDualWieldMod",   propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Two-Handed Bonus",      
+    propKey="ArmorTwohandedCombatMod", propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Run Bonus",             
+    propKey="ArmorRunMod",         propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Thievery Bonus",        
+    propKey="ArmorThieveryMod",    propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Shield Bonus",          
+    propKey="ArmorShieldMod",      propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Perception Bonus",      
+    propKey="ArmorPerceptionMod",  propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Deception Bonus",       
+    propKey="ArmorDeceptionMod",   propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Max Health Bonus",      
+    propKey="ArmorHealthMod",      propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Health Regen Bonus",    
+    propKey="ArmorHealthRegenMod", propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Max Stamina Bonus",     
+    propKey="ArmorStaminaMod",     propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Stamina Regen Bonus",   
+    propKey="ArmorStaminaRegenMod",propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Max Mana Bonus",        
+    propKey="ArmorManaMod",        propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Mana Regen Bonus",      
+    propKey="ArmorManaRegenMod",   propType="FloatValues",
+    widget="float", ops={">=",">"}, default=0.0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING }
+  },
+  {
+    label="Ward Level",            
+    propKey="WardLevel",           propType="IntValues",
+    widget="int", ops={">=","<=",">","<","=="}, default=0,
+    categories = "*", --{ C.ARMOR, C.JEWELRY }
+  },
+  {
+    label="Sockets",       
+    propKey="JewelSockets",    propType="IntValues",
+    widget="int", ops={">=",">"}, default=0,
+    categories = "*", --{ C.ARMOR, C.CLOTHING, C.JEWELRY }
+  },
+  {
+    label="Resource Penalty",      
     propKey="ArmorResourcePenalty",propType="FloatValues",
     widget="float", ops={"<=","<"}, default=0.0,
     categories = "*", --{ C.ARMOR }
-   },
+  },
     
 }
 
 -- ── Weapon mods (WeaponXxx floats, IDs 20015–20017, 20047–20049) ─────────────
 
 M.weapon_mods = {
-  { label="War Magic Bonus",         pretext="Bonus to War Magic Skill: +",      posttext="%%",
+  {
+    label="War Magic Bonus",         
     propKey="WeaponWarMagicMod",     propType="FloatValues",
     widget="float", ops={">=",">"}, default=0.0,
     categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND }
-   },
-
-  { label="Life Magic Bonus",        pretext="Bonus to Life Magic Skill: +",     posttext="%%",
+  },
+  {
+    label="Life Magic Bonus",        
     propKey="WeaponLifeMagicMod",    propType="FloatValues",
     widget="float", ops={">=",">"}, default=0.0,
     categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND }
-   },
-
-  { label="Restoration Bonus",       pretext="Healing Bonus for Restoration Spells: +", posttext="%%",
+  },
+  {
+    label="Restoration Bonus",       
     propKey="WeaponRestorationSpellsMod", propType="FloatValues",
     widget="float", ops={">=",">"}, default=1.0,
     categories = "*", --{ C.WEAPON_WAND }
-   },
-
-  { label="Physical Defense Bonus",  pretext="Bonus to Physical Defense: +",     posttext="%%",
+  },
+  {
+    label="Physical Defense Bonus",  
     propKey="WeaponPhysicalDefense", propType="FloatValues",
     widget="float", ops={">=",">"}, default=1.0,
     categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND }
-   },
-
-  { label="Magic Defense Bonus",     pretext="Bonus to Magic Defense: +",        posttext="%%",
+  },
+  {
+    label="Magic Defense Bonus",     
     propKey="WeaponMagicalDefense",  propType="FloatValues",
     widget="float", ops={">=",">"}, default=1.0,
     categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND }
-   },
-
-  { label="Ward Cleaving",           pretext="Ward Cleaving: ",                  posttext="%% ignored",
+  },
+  {
+    label="Ward Cleaving",           
     propKey="IgnoreWard",            propType="FloatValues",
     widget="float", ops={"<=","<"}, default=1.0,    -- lower = ignores more
     categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE, C.WEAPON_WAND }
-   },
-
-  { label="Stamina Cost Reduction",  pretext="Stamina Cost Reduction: ",         posttext="%%",
+  },
+  {
+    label="Stamina Cost Reduction",  
     propKey="StaminaCostReductionMod", propType="FloatValues",
     widget="float", ops={">=",">"}, default=0.0,
     categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE }
-   },
-
-  { label="Sockets",  pretext="Sockets: ",         posttext="",
+  },
+  {
+    label="Sockets",  
     propKey="StaminaCostReductionMod", propType="IntValues",
     widget="int", ops={">=",">","<","<=","!="}, default=0.0,
     categories = "*", --{ C.WEAPON_MELEE, C.WEAPON_MISSILE }
-   },
-}
+  },
 
+-- these were missing from first AI pass. lazily slopped in, just in case?
+  -- FloatValues
+  { label="Weapon Aura Damage",
+    propKey="WeaponAuraDamage",    propType="FloatValues",
+    widget="float", ops={">=","<=",">","<","=="}, default=0.0,
+    categories="*",
+  },
+  { label="Resist Bleed",          
+    propKey="ResistBleed",         propType="FloatValues",
+    widget="float", ops={">=","<=",">","<","=="}, default=0.0,
+    categories="*",
+  },
+
+  -- IntValues
+  { label="Tier",                  
+    propKey="Tier",                propType="IntValues",
+    widget="int", ops={">=","<=",">","<","=="}, default=1,
+    categories="*",
+  },
+  { label="Base Armor",            
+    propKey="BaseArmor",           propType="IntValues",
+    widget="int", ops={">=","<=",">","<","=="}, default=0,
+    categories="*",
+  },
+  { label="Base Damage",           
+    propKey="BaseDamage",          propType="IntValues",
+    widget="int", ops={">=","<=",">","<","=="}, default=0,
+    categories="*",
+  },
+  { label="Base Ward",             
+    propKey="BaseWard",            propType="IntValues",
+    widget="int", ops={">=","<=",">","<","=="}, default=0,
+    categories="*",
+  },
+  { label="Gear Max Stamina",      
+    propKey="GearMaxStamina",      propType="IntValues",
+    widget="int", ops={">=",">","=="}, default=0,
+    categories="*",
+  },
+  { label="Gear Max Mana",         
+    propKey="GearMaxMana",         propType="IntValues",
+    widget="int", ops={">=",">","=="}, default=0,
+    categories="*",
+  },
+  { label="Viper's Strike",        
+    propKey="GearVipersStrike",    propType="IntValues",
+    widget="int", ops={">=",">","=="}, default=0,
+    categories="*",
+  },
+  { label="Weapon Subtype",        
+    propKey="WeaponSubtype",       propType="IntValues",
+    widget="int", ops={">=","<=",">","<","=="}, default=0,
+    categories="*",
+  },
+  { label="Trophy Quality",        
+    propKey="TrophyQuality",       propType="IntValues",
+    widget="int", ops={">=","<=",">","<","=="}, default=0,
+    categories="*",
+  },
+  { label="Jewel Material",        
+    propKey="JewelMaterialType",   propType="IntValues",
+    widget="int", ops={">=","<=",">","<","=="}, default=0,
+    categories="*",
+  },
+  { label="Jewel Quality",         
+    propKey="JewelQuality",        propType="IntValues",
+    widget="int", ops={">=","<=",">","<","=="}, default=0,
+    categories="*",
+  }
+}
 -- ── Gear ratings (GearXxx IntValues, IDs 409–504) ────────────────────────────
 -- Generated programmatically — all identical shape.
 
