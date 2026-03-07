@@ -761,11 +761,11 @@ function ItemExamine:ShowRatings()
 end
 
 local function damageMaskToString(dmgTypeMask)
-  local dest=""
+  local dest=", "
   local DamageTypes={[1]="Slashing", [2]="Piercing", [4]="Bludgeoning",[8]="Cold",[16]="Fire",[32]="Acid",[64]="Electric",[128]="Health",[256]="Stamina",[512]="Mana",[1024]="Nether",[2048]="Base"}
   for maskIndex,typeString in pairs(DamageTypes) do
     if bit.band(dmgTypeMask,maskIndex)>0 then
-      dest = dest .. (#dest>0 and "/" or "") .. typeString
+      dest = dest .. (#dest>2 and "/" or "") .. typeString
     end
   end
   return dest
@@ -1526,3 +1526,4 @@ function ItemExamine:ShowDescription()
 end
 
 return ItemExamine
+
