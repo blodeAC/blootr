@@ -281,13 +281,52 @@ buildItem = function(e)
     },
   }
 
-  -- spells
+  -- spells [EXPERIMENTAL]
+  itemData.spellsInfo = {}
   for _, spellId in ipairs(weenie.SpellIds) do
-    itemData.spells = (itemData.spells or "") .. game.Character.SpellBook.Get(spellId.Id).Name .. ", "
+    local spell = game.Character.SpellBook.Get(spellId.Id)
+    itemData.spells = (itemData.spells or "") .. spell.Name .. ", "
+
+    local desc = ""
+    local mult = 1
+    local percentSign = "%%"
+    ---@diagnostic disable-next-line
+    for _,flag in ipairs(EnchantmentFlags.GetValues()) do
+      if bit.band(spell.StatModType.ToNumber(),flag.ToNumber())>0 then
+        local statFlags=spell.StatModType.ToNumber()
+        if bit.band(statFlags, EnchantmentFlags.Int.ToNumber())>0 then
+          desc = tostring(spell.StatModIntProp)
+          percentSign=""
+        elseif bit.band(statFlags, EnchantmentFlags.Float.ToNumber())>0 then
+          desc = tostring(spell.StatModFloatProp)
+          mult = 100
+        elseif bit.band(statFlags, EnchantmentFlags.Skill.ToNumber())>0 then
+          desc = tostring(spell.StatModSkill)
+          percentSign = ""
+        elseif (bit.band(statFlags, EnchantmentFlags.Attribute.ToNumber()) +
+                bit.band(statFlags, EnchantmentFlags.Attribute2nd.ToNumber()))>0 then
+          desc = tostring(spell.StatModAttribute)
+          percentSign = ""
+        end
+
+        if bit.band(statFlags, EnchantmentFlags.Additive.ToNumber())>0 then
+          desc = desc .. string.format(" increased by %.0f%s",spell.StatModVal*mult,percentSign)
+        elseif bit.band(statFlags, EnchantmentFlags.Additive_Degrade.ToNumber())>0 then
+          desc = desc .. string.format(" reduced by %.0f%s",spell.StatModVal*mult,percentSign)
+        elseif bit.band(statFlags, EnchantmentFlags.Multiplicative.ToNumber())>0 then
+          desc = desc .. string.format(" multiplied by %.0f%s",spell.StatModVal*mult,percentSign)
+        elseif bit.band(statFlags, EnchantmentFlags.Multiplicative_Degrade.ToNumber())>0 then
+          desc = desc .. string.format(" multiplied by %.0f%s",(1-spell.StatModVal)*mult,percentSign)
+        end
+      end
+    end
+    table.insert(itemData.spellsInfo,{name=spell.Name,id=spellId.Id, desc=desc})
   end
+  
   if itemData.spells and #itemData.spells > 0 then
     itemData.spells = itemData.spells:sub(1, -3)
   end
+
 
   -- value tables
   for typeName in pairs(VALUE_TYPES) do
@@ -371,7 +410,7 @@ buildItem = function(e)
     end
   end
 
-  if game.World.Selected and game.World.Selected.Id == objectId then
+  if game.World.Selected and game.World.Selected.Id == objectId and (not UIState.item or  UIState.item.id~=objectId) then
     UIState.textLines    = ex.lines
     UIState.item         = itemData
     UIState.category     = category
@@ -776,7 +815,30 @@ local function renderInlineRow(row, i)
   ImGui.TableNextRow()
 
   ImGui.TableSetColumnIndex(0)
-  ImGui.Text(row.entry.label)
+  local label = row.entry.label
+  local annotation
+  if row.entry.propKey == "DamageVariance" then
+    local variance = tonumber(row.value)
+    if variance then
+      for _, other in ipairs(UIState.presentProps) do
+        if other.entry.propKey == "Damage" then
+          local dmg = tonumber(other.value)
+          if dmg then
+            annotation = string.format("[%.2f - %d]", (1 - variance) * dmg, dmg)
+          end
+          break
+        end
+      end
+    end
+  end
+  ImGui.Text(label)
+  if annotation then
+    local drawList = ImGui.GetWindowDrawList()
+    local sz       = ImGui.CalcTextSize(annotation)
+    local screenX  = ImGui.GetWindowPos().X + ImGui.GetContentRegionMax().X - sz.X
+    local screenY  = ImGui.GetItemRectMin().Y
+    drawList.AddText(Vector2.new(screenX, screenY), 0xFF888888, annotation)
+  end
 
   ImGui.TableSetColumnIndex(1)
   ImGui.SetNextItemWidth(COL_OP)
@@ -1327,7 +1389,7 @@ local function renderTestMode()
                 local failLabel = me and me.label or failRule.propKey or failRule.propType or "?"
                 ImGui.SameLine()
                 ImGui.PushStyleColor(_imgui.ImGuiCol.Text, C_TEXT_ORANGE)
-                ImGui.TextWrapped(failLabel .. " " .. tostring(failRule.op) .. " " .. tostring(failRule.value))
+                ImGui.TextWrapped(failLabel .. " " .. tostring(failRule.op) .. " " ..  ruleValueStr(failRule))
                 ImGui.PopStyleColor()
               end
             end
