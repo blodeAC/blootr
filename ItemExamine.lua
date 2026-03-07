@@ -510,37 +510,9 @@ local serverLogic = require("ItemExamine_" .. game.ServerName)
 
 function ItemExamine.new(itemData)
   local self = setmetatable({}, ItemExamine)
-  if serverLogic~=nil then          -- this is daralet specific, really. needs to move to a preprocessor or something
-    if itemData.objectClass~=ObjectClass.Misc or itemData.IntValues["JewelQuality"] then
-      itemData.StringValues.Use = nil
-    end
-    if itemData.StringValues["LongDesc"]~=nil then
-      local lastLine = itemData.StringValues.LongDesc:match("[^\n]+$")  -- last non-empty line
-      if lastLine and lastLine:sub(1,1) ~= "~" then
-        itemData.StringValues["LongDesc"] = lastLine .. "\n"
-      else
-        itemData.StringValues["LongDesc"] = nil
-      end
-    end
-    
+  if serverLogic~=nil then
     local ex = serverLogic.new(itemData)
     self.item  = ex.item
-
-    local lines = {}
-    if self.item.StringValues["LongDesc"]~=nil then
-      for line in self.item.StringValues["LongDesc"]:gmatch("[^\n]+") do   -- keeps from repeated decoration. i don't know how it's coming back
-        table.insert(lines, line)
-      end
-
-      local secondLast = lines[#lines - 1]
-      if secondLast == lines[#lines] then
-        lines[#lines-1] = ""
-        itemData.StringValues["LongDesc"] = ""
-        for _, line in ipairs(lines) do
-          itemData.StringValues["LongDesc"] =  itemData.StringValues["LongDesc"] .. "\n" .. line
-        end
-      end
-    end
   else
     self.item = itemData
   end
