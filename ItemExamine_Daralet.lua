@@ -150,10 +150,9 @@ function ItemExamine_Daralet.new(itemData)
   end
   self.equippedItems = {}
   
-  --self.itemWo= game.World.Get(itemData.id)
   self.lines = {}
   
-  self:SetCustomDecorationLongText()
+  --self:SetCustomDecorationLongText() -- uhhhhhh complicated why this is turned off. regex in file before
   self:SetTinkeringLongText()
   
   if self._hasLongDescAdditions then
@@ -170,7 +169,7 @@ function ItemExamine_Daralet.new(itemData)
   end
   
   -- Trophy Quality Level
-  self:SetTrophyQualityLevelText()
+  --self:SetTrophyQualityLevelText() -- this is fucked in a couple ways, for us
   
   -- Protection Levels ('Use' text)
   self:SetProtectionLevelsUseText()
@@ -456,7 +455,8 @@ function ItemExamine_Daralet.new(itemData)
   self:SetArmorModUseText("ArmorStaminaRegenMod", self.item.FloatValues["ArmorStaminaRegenMod"], "Bonus to Stamina Regen: +(ONE)%%", (equipped and self:GetEquippedItemsSkillModSum("ArmorStaminaRegenMod") or 0))
   self:SetArmorModUseText("ArmorManaMod", self.item.FloatValues["ArmorManaMod"], "Bonus to Maximum Mana: +(ONE)%%", (equipped and self:GetEquippedItemsSkillModSum("ArmorManaMod") or 0))
   self:SetArmorModUseText("ArmorManaRegenMod",self.item.FloatValues["ArmorManaRegenMod"], "Bonus to Mana Regen: +(ONE)%%", (equipped and self:GetEquippedItemsSkillModSum("ArmorManaRegenMod") or 0))
-  
+  self._extraPropertiesText = (self._extraPropertiesText or "") .. [[ 
+]]
   
   self:SetDamagePenaltyUseText()
   self:SetJewelcraftingUseText()
@@ -466,7 +466,6 @@ function ItemExamine_Daralet.new(itemData)
   
   if (self._hasExtraPropertiesText) then
     self._extraPropertiesText = self._extraPropertiesText .. ""
-    --print(self._extraPropertiesText)
     self.item.StringValues["Use"] = self._extraPropertiesText
     
     if (self._additionalPropertiesLongDescriptionsText and #(self._additionalPropertiesLongDescriptionsText) > 0) then
@@ -474,8 +473,7 @@ function ItemExamine_Daralet.new(itemData)
       
       self._additionalPropertiesLongDescriptionsText =
       "Property Descriptions:\n" .. (self._additionalPropertiesLongDescriptionsText or "") .. "\n\n" .. (longDescString or "")
-      self.item.StringValues["LongDesc"] = self._additionalPropertiesLongDescriptionsText
-      --print(self.item.StringValues.LongDesc)
+      self.item.StringValues["LongDesc"] = self._additionalPropertiesLongDescriptionsText .. (self.item.StringValues["LongDesc"] or "")
     end
   end
   return self
@@ -2067,6 +2065,7 @@ function ItemExamine_Daralet:SetJewelcraftingUseText()
       currentSocketQualityLevel == nil or currentSocketQualityLevel < 1 then
         self._extraPropertiesText = (self._extraPropertiesText or "") .. [[
     Empty Jewel Socket
+
 ]]
         --print("----------" .. self._extraPropertiesText)
       else
@@ -2876,8 +2875,8 @@ function ItemExamine_Daralet:SetNoCompsRequiredSchoolUseLongText()
 
         local desc = description
         
-        desc = string.gsub(desc, "(ONE)",  tostring(amountOne) .. percentSign )
-        desc = string.gsub(desc, "(TWO)",  tostring(amountTwo) .. percentSign )
+        desc = string.gsub(desc, "ONE%)",  tostring(amountOne) .. percentSign )
+        desc = string.gsub(desc, "TWO%)",  tostring(amountTwo) .. percentSign )
         
         self._additionalPropertiesLongDescriptionsText = (self._additionalPropertiesLongDescriptionsText or "") .. string.format([[~ %s: %s
 ]], name, desc)
