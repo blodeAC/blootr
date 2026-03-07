@@ -845,7 +845,6 @@ function ItemExamine:ShowWeaponAndArmorData()
       
       local _, elemBonus = InqInt(self.item, IntId.ElementalDamageBonus)
       if elemBonus > 0 then
-        local DamageTypes={[1]="Slashing", [2]="Piercing", [4]="Bludgeoning",[8]="Cold",[16]="Fire",[32]="Acid",[64]="Electric",[128]="Health",[256]="Stamina",[512]="Mana",[1024]="Nether",[2048]="Base"}
         self:Add(string.format("Elemental Damage Bonus: %d, %s.", elemBonus, damageMaskToString(damageType)))
       end
       
@@ -860,7 +859,7 @@ function ItemExamine:ShowWeaponAndArmorData()
       
       -- Speed and range (for melee/missile/two‑handed)
       if bit.band(valid_locations, 0x2500000) > 0 then
-        local _, weapTime = InqInt(self.item, "Speed")
+        local _, weapTime = InqInt(self.item, "WeaponTime")
         if weapTime < 0 then
           self:Add("Speed:  Unknown")
           if IsMissile then self:Add("Range:  Unknown") end
@@ -982,7 +981,7 @@ function ItemExamine:ShowShortMagicInfo()
   --local okSpell, spellDID    = InqDataID(self.item, DataId.Spell)
   --local okProc, procSpellDID = InqDataID(self.item, DataId.ProcSpell)
   local hasSpells = self.item.spells ~= nil and self.item.spells ~= ""
-  if hasSpells then -- or okSpell or okProc  
+  if hasSpells then -- or okSpell or okProc
     --local parts = {}
     --if okSpell and spellDID    > 0 then table.insert(parts, tostring(spellDID))    end
     --if okProc  and procSpellDID> 0 then table.insert(parts, tostring(procSpellDID))end
@@ -1486,6 +1485,13 @@ function ItemExamine:ShowMagicInfo()
     end
   end
   self:Add("")
+  if self.item.spellsInfo then
+    self:Add("Spell Descriptions:")
+    for _,spellInfo in ipairs(self.item.spellsInfo or {}) do
+      self:Add(string.format("~ %s: %s",spellInfo.name,spellInfo.desc or ""))
+    end
+    self:Add("")
+  end
 end
 
 function ItemExamine:ShowDescription()
@@ -1526,4 +1532,3 @@ function ItemExamine:ShowDescription()
 end
 
 return ItemExamine
-
