@@ -275,6 +275,7 @@ buildItem = function(e)
   local itemData = {
     id   = objectId,
     name = weenie.Name,
+    objectClass = weenie.ObjectClass,
     lootCriteria = {
       IntValues={}, BoolValues={}, DataValues={},
       Int64Values={}, FloatValues={}, StringValues={},
@@ -283,7 +284,9 @@ buildItem = function(e)
 
   -- spells [EXPERIMENTAL]
   itemData.spellsInfo = {}
+  
   for _, spellId in ipairs(weenie.SpellIds) do
+    
     local spell = game.Character.SpellBook.Get(spellId.Id)
     itemData.spells = (itemData.spells or "") .. spell.Name .. ", "
 
@@ -304,7 +307,7 @@ buildItem = function(e)
       desc = desc .. string.format(" multiplied by %.0f%s",(1-spell.StatModVal)*( float and 100 or 1), (float and "%%" or ""))
     end
     if desc == tostring(spell.Category) then
-      desc = desc .. " increased by " .. (spell.Power or "")
+      desc = desc .. " increased by  ??" --.. (spell.Power or "")
     end
     table.insert(itemData.spellsInfo,{name=spell.Name,id=spellId.Id, desc=desc})
   end
@@ -312,7 +315,6 @@ buildItem = function(e)
   if itemData.spells and #itemData.spells > 0 then
     itemData.spells = itemData.spells:sub(1, -3)
   end
-
 
   -- value tables
   for typeName in pairs(VALUE_TYPES) do
@@ -354,6 +356,28 @@ buildItem = function(e)
     if wp["Speed"]      then itemData.IntValues["Speed"]           = wp["Speed"]      end
   end
 
+  -- creature profile
+  if type(e) ~= "number" and e.Data and e.Data.CreatureProfile then
+    local crp = e.Data.CreatureProfile
+    itemData.CreatureProfile ={
+      Strength     = crp.Strength,
+      Endurance    = crp.Endurance,
+      Coordination = crp.Coordination,
+      Quickness    = crp.Quickness,
+      Focus        = crp.Focus,
+      Self         = crp.Self,
+      Health       = crp.Health,
+      HealthMax    = crp.HealthMax,
+      Stamina      = crp.Stamina,
+      StaminaMax   = crp.StaminaMax,
+      Mana         = crp.Mana,
+      ManaMax      = crp.ManaMax,
+      AttrColor    = crp.AttrColor,
+      AttrHighlight= crp.AttrHighlight
+    }
+    -- also has flags?
+  end
+
   -- buff highlight bitmasks
   if type(e) ~= "number" and e.Data and e.Data.ProtHighlight then
     itemData.IntValues["ProtHighlight"] = e.Data.ProtHighlight.ToNumber()
@@ -363,10 +387,24 @@ buildItem = function(e)
     itemData.IntValues["WeapHighlight"] = e.Data.WeapHighlight.ToNumber()
     itemData.IntValues["WeapColor"]     = e.Data.WeapColor.ToNumber()
   end
+  
+  if e.Data.BaseArmorHead then
+      itemData.BaseArmorHead = e.Data.BaseArmorHead
+      itemData.BaseArmorChest = e.Data.BaseArmorChest
+      itemData.BaseArmorGroin = e.Data.BaseArmorGroin
+
+      itemData.BaseArmorBicep = e.Data.BaseArmorBicep
+      itemData.BaseArmorWrist = e.Data.BaseArmorWrist
+      itemData.BaseArmorHand = e.Data.BaseArmorHand
+      
+      itemData.BaseArmorThigh = e.Data.BaseArmorThigh
+      itemData.BaseArmorShin = e.Data.BaseArmorShin
+      itemData.BaseArmorFoot = e.Data.BaseArmorFoot
+  end
 
   AppraiseInfo[objectId] = itemData
 
-  local ex = ItemExamine.new(itemData)
+  local ex = ItemExamine.new(itemData,e.Data.CreatureProfile~=nil)
   if not ex then print("niled out"); return end
 
   local category = catDetect.detect(itemData)
@@ -1188,22 +1226,78 @@ local function renderNoneMode()
   ImGui.Separator()
   ImGui.TextDisabled("No item inspected.")
 end
+--[[
+      if ImGui.BeginTable("##testresults", 2, _imgui.ImGuiTableFlags.SizingFixedFit) then
+        ImGui.TableSetupColumn("##rsname",   _imgui.ImGuiTableColumnFlags.WidthStretch)
+        ImGui.TableSetupColumn("##rsresult", _imgui.ImGuiTableColumnFlags.WidthFixed, 200)
+]]
+local function centerText(text, flags, wrap)
+  if flags and flags.centered then
+    local colW  = ImGui.GetColumnWidth()
+    if colW < 0 then colW = ImGui.GetContentRegionAvail().X end
+    ImGui.SetCursorPosX(ImGui.GetCursorPosX() + math.max(0, colW/2 - ImGui.CalcTextSize(text).X/2))
+  elseif flags and flags.rightAlign then
+    local colW  = ImGui.GetColumnWidth()
+    if colW < 0 then colW = ImGui.GetContentRegionAvail().X end
+    ImGui.SetCursorPosX(ImGui.GetCursorPosX() + math.max(0, colW - ImGui.CalcTextSize(text).X))
+  end
+  if not wrap then
+    ImGui.Text(text)
+  else
+    ImGui.TextWrapped(text)
+  end
+end
 
 local function renderTextMode()
   renderTopNav()
   ImGui.Separator()
+  ImGui.PushStyleVar(_imgui.ImGuiStyleVar.ItemSpacing, Vector2.new(ImGui.GetStyle().ItemSpacing.X, 0))
   if ImGui.BeginChild("##properties") then
     for _, line in ipairs(UIState.textLines or {}) do
-      if line.color then
+      if line.text=="$IMGUI_SEPARATOR" then
+        ImGui.Separator()
+      elseif line.textTable then
+        local numCols = #line.textTable
+        local numRows = #line.textTable[1]
+        if ImGui.BeginTable("##table".._, numCols, _imgui.ImGuiTableFlags.SizingFixedFit) then
+          for c = 1, numCols do
+            ImGui.TableSetupColumn("##tableCol"..c, (c>1 and _imgui.ImGuiTableColumnFlags.WidthFixed or _imgui.ImGuiTableColumnFlags.WidthStretch))
+          end
+          for r = 1, numRows do
+            ImGui.TableNextRow()
+            for c = 1, numCols do
+              ImGui.TableSetColumnIndex(c - 1)
+              local cell=line.textTable[c][r]
+              if type(cell)=="table" then
+                if cell.color then ImGui.PushStyleColor(_imgui.ImGuiCol.Text, cell.color) end
+                centerText(cell.text, cell.mods)
+                if cell.color then ImGui.PopStyleColor() end
+              else
+                centerText(line.textTable[c][r], cell.mods)
+              end
+            end
+          end
+          ImGui.EndTable()
+        end
+      elseif line.color and line.color~="" then
         ImGui.PushStyleColor(_imgui.ImGuiCol.Text, line.color)
-        ImGui.TextWrapped(line.text)
+        centerText(line.text,line.mods,true)
         ImGui.PopStyleColor()
       else
-        ImGui.TextWrapped(line.text)
+        centerText(line.text,line.mods,true)
+      end
+      if line.mods and line.mods.underline then
+        local min = ImGui.GetItemRectMin()
+        local max = ImGui.GetItemRectMax()
+        ImGui.GetWindowDrawList().AddLine(
+          Vector2.new(min.X, max.Y),
+          Vector2.new(max.X, max.Y),
+          0xFFFFFFFF, 0.1)
       end
     end
   end
   ImGui.EndChild()
+  ImGui.PopStyleVar()
 end
 
 local function renderRulesMode()
