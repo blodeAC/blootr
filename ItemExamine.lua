@@ -214,12 +214,52 @@ local function InqAttribute2ndName(iSkill)
   elseif iSkill == 6 then return "Mana"
   else return "" end
 end
+local ValidSkills = {
+  "MeleeDefense",
+  "MissileDefense",
+  "ArcaneLore",
+  "MagicDefense",
+  "ManaConversion",
+  "ItemTinkering",
+  "AssessPerson",
+  "Deception",
+  "Healing",
+  "Jump",
+  "Lockpick",
+  "Run",
+  "AssessCreature",
+  "WeaponTinkering",
+  "ArmorTinkering",
+  "MagicItemTinkering",
+  "CreatureEnchantment",
+  "ItemEnchantment",
+  "LifeMagic",
+  "WarMagic",
+  "Leadership",
+  "Loyalty",
+  "Fletching",
+  "Alchemy",
+  "Cooking",
+  "Salvaging",
+  "TwoHandedCombat",
+  "VoidMagic",
+  "HeavyWeapons",
+  "LightWeapons",
+  "FinesseWeapons",
+  "MissileWeapons",
+  "Shield",
+  "DualWield",
+  "Recklessness",
+  "SneakAttack",
+  "DirtyFighting",
+  "Summoning"
+}
 
 -- For now, just stringify skill; you can wire this to a real table later. [file:1]
 local function InqSkillName(iSkill)
   ---@diagnostic disable-next-line
   for _,sk in ipairs(SkillId.GetValues()) do
-    if _==iSkill+1 then
+    if sk.ToNumber()==iSkill then
       return tostring(sk)
     end
   end
@@ -452,6 +492,31 @@ StringToMaterialType = setmetatable({
     return nil
   end
 })
+local PlayerKillerStatus = {
+    Undef           = 0x00,
+    Protected       = 0x01,
+    NPK             = 0x02,
+    PK              = 0x04,
+    Unprotected     = 0x08,
+    RubberGlue      = 0x10,
+    Free            = 0x20,
+    PKLite          = 0x40
+}
+local function GetSocietyRank(tickets)
+  if tickets >= 1001 then
+    return "Master"
+  elseif tickets >= 601 then
+    return "Lord"
+  elseif tickets >=301 then
+    return "Knight"
+  elseif tickets >=101 then
+    return "Adept"
+  elseif tickets >= 1 then
+    return "Initiate"
+  else
+    return "Free agent"
+  end
+end
 
 ----------------------------------------------------------------------
 -- Set names (from Appraisal_ShowSet switch, trimmed to needed cases) [file:1]
@@ -500,15 +565,16 @@ SetNames = {
   [124]="Blackfire Smoldering Darkened Mind",[125]="Blackfire Shivering Darkened Mind",
   [126]="Blackfire Stinging Clouded Spirit",[127]="Blackfire Sparking Clouded Spirit",
   [128]="Blackfire Smoldering Clouded Spirit",[129]="Blackfire Shivering Clouded Spirit",
-  [130]="Shimmering Shadows",
+  [130]="Shimmering Shadows"
 }
 
 ----------------------------------------------------------------------
 -- ItemExamine core
 ----------------------------------------------------------------------
 local serverLogic = require("ItemExamine_" .. game.ServerName)
+local AllegianceTitle = require("AllegianceTitle")
 
-function ItemExamine.new(itemData)
+function ItemExamine.new(itemData,creatureBool)
   local self = setmetatable({}, ItemExamine)
   if serverLogic~=nil then
     local ex = serverLogic.new(itemData)
@@ -516,55 +582,68 @@ function ItemExamine.new(itemData)
   else
     self.item = itemData
   end
-  
   self.lines = {}
-  
-  self:ShowName()
-  self:ShowValueInfo()
-  self:ShowBurdenInfo()
-  self:ShowTinkeringInfo()
-  self:ShowWorkmanship()
-  local hasSet     = self:ShowSet()
-  local hasRatings = self:ShowRatings()
-  if hasSet or hasRatings then
+  if not creatureBool then  
+    self:ShowName()
+    self:ShowValueInfo()
+    self:ShowBurdenInfo()
+    self:ShowTinkeringInfo()
+    self:ShowWorkmanship()
+    self:ShowSalvageCount()
+    local hasSet     = self:ShowSet()
+    local hasRatings = self:ShowRatings()
+    if hasSet or hasRatings then
+      self:Add("")
+    end
+    
+    self:ShowWeaponAndArmorData()
+    self:ShowDefenseModData()
+    self:ShowArmorMods()
+    self:ShowShortMagicInfo()
+    self:ShowSpecialProperties()
+    self:ShowUsage()
+    self:ShowLevelLimitInfo()
+    self:ShowWieldRequirements()
+    self:ShowUsageLimitInfo()
+    self:ShowItemLevelInfo()
+    self:ShowActivationRequirements()
+    self:ShowCasterData()
+    self:ShowBoostValue()
+    self:ShowHealKitValues()
+    self:ShowCapacity()
+    self:ShowLockAppraiseInfo()
+    self:ShowManaStoneInfo()
+    self:ShowRemainingUses()
+    self:ShowCraftsman()
+    self:ShowSellable()
+    self:ShowRareInfo()
+    self:ShowMagicInfo()
+    self:ShowDescription()
     self:Add("")
-  end
   
-  self:ShowWeaponAndArmorData()
-  self:ShowDefenseModData()
-  self:ShowArmorMods()
-  self:ShowShortMagicInfo()
-  self:ShowSpecialProperties()
-  self:ShowUsage()
-  self:ShowLevelLimitInfo()
-  self:ShowWieldRequirements()
-  self:ShowUsageLimitInfo()
-  self:ShowItemLevelInfo()
-  self:ShowActivationRequirements()
-  self:ShowCasterData()
-  self:ShowBoostValue()
-  self:ShowHealKitValues()
-  self:ShowCapacity()
-  self:ShowLockAppraiseInfo()
-  self:ShowManaStoneInfo()
-  self:ShowRemainingUses()
-  self:ShowCraftsman()
-  self:ShowSellable()
-  self:ShowRareInfo()
-  self:ShowMagicInfo()
-  self:ShowDescription()
-  self:Add("")
+  else
+    self:ShowCreatureHeader()
+    self:ShowCreatureAttributes()
+    self:ShowCreatureAllegiance()
+    self:ShowCreatureArmor()
+    self:ShowCreatureRatings()
+      --if crit_dmg_resist      > 0 then table.insert(parts, "Crit Dam Resist " .. crit_dmg_resist) end
+      --if healing_boost_rating > 0 then table.insert(parts, "Heal Boost " .. healing_boost_rating) end
+      --if nether_resist_rating > 0 then table.insert(parts, "Nether Resist " .. nether_resist_rating) end
+      --if life_resist_rating   > 0 then table.insert(parts, "Life Resist " .. life_resist_rating) end
+      
+  end
   return self
 end
 
-function ItemExamine:Add(text, color)
-  table.insert(self.lines, { text = text or "", color = color })
+--( text = textStringToPrint, color=Vector2.new(imguicolor), modText = "underline")
+--( text = {text = textStringToPrint,width=imguiwidth}, color=Vector2.new(imguicolor), modText = "underline")
+function ItemExamine:Add(text, color, mods)
+  table.insert(self.lines, { text = text or "", color = color, mods=mods or {} })
 end
-
-function ItemExamine:AddLines(lines)
-  for _,line in ipairs(lines) do
-    table.insert(self.lines, line)
-  end
+--textTable = { [1]={row1column1text,row2column1text,...},[2]={row1column2text,row2column2text,...}... }
+function ItemExamine:AddTable(textTable)
+  table.insert(self.lines, { textTable = textTable, mods={}})
 end
 
 function ItemExamine:GetText()
@@ -634,9 +713,16 @@ function ItemExamine:ShowName()
   if okM then
     materialString = StringToMaterialType[material] .. " "
   end
+
+  local stackSizeStr=""
+  local okS, stackSize = InqInt(self.item, IntId.StackSize)
+  if stackSize > 1 then
+    stackSizeStr = tostring(stackSize) .. " "
+  end
+
   local okN, name = InqString(self.item, StringId.Name)
   if okN then
-    self:Add(materialString .. name)
+    self:Add(stackSizeStr .. materialString .. name .. (stackSize>1 and "s" or ""),"",{centered=true,underline=true})
   end
 end
 
@@ -659,33 +745,39 @@ function ItemExamine:ShowBurdenInfo()
   end
   
 end
-
+function ItemExamine:ShowSalvageCount()
+  local okN, num = InqInt(self.item, IntId.NumItemsInMaterial)
+  if okN then
+    self:Add("Salvaged from "..num.." items.")
+    self:Add("")
+  end
+end
 function ItemExamine:ShowWorkmanship()
+  local workmanship=""
   local ok, val = InqInt(self.item, IntId.ItemWorkmanship)
   if ok and val then
-    if val==1 then
-      self:Add("Workmanship: Poorly crafted (1)")
-    elseif val==2 then
-      self:Add("Workmanship: Well-crafted (2)")
-    elseif val==3 then
-      self:Add("Workmanship: Finely crafted (3)")
-    elseif val==4 then
-      self:Add("Workmanship: Exquisitely crafted (4)")
-    elseif val==5 then
-      self:Add("Workmanship: Magnificent (5)")
-    elseif val==6 then
-      self:Add("Workmanship: Nearly flawless (6)")
-    elseif val==7 then
-      self:Add("Workmanship: Flawless (7)")
-    elseif val==8 then
-      self:Add("Workmanship: Utterly flawless (8)")
-    elseif val==9 then
-      self:Add("Workmanship: Incomparable (9)")
-    elseif val==10 then
-      self:Add("Workmanship: Priceless (10)")
+    local okN, num = InqInt(self.item, IntId.NumItemsInMaterial)
+    if okN then
+      val=val/num
     end
-  end
-  
+    if     val >= 10 then workmanship = "Workmanship: Priceless"
+    elseif val >= 9  then workmanship = "Workmanship: Incomparable"
+    elseif val >= 8  then workmanship = "Workmanship: Utterly flawless"
+    elseif val >= 7  then workmanship = "Workmanship: Flawless"
+    elseif val >= 6  then workmanship = "Workmanship: Nearly flawless"
+    elseif val >= 5  then workmanship = "Workmanship: Magnificent"
+    elseif val >= 4  then workmanship = "Workmanship: Exquisitely crafted"
+    elseif val >= 3  then workmanship = "Workmanship: Finely crafted"
+    elseif val >= 2  then workmanship = "Workmanship: Well-crafted"
+    elseif val >= 1  then workmanship = "Workmanship: Poorly crafted"
+    end
+    if okN then
+      workmanship = workmanship .. string.format(" (%.2f)",val)
+    else
+      workmanship = workmanship .. string.format(" (%d)",val)
+    end
+    self:Add(workmanship)
+  end  
   self:Add("")
 end
 
@@ -758,9 +850,11 @@ end
 
 local function damageMaskToString(dmgTypeMask)
   local dest=", "
-  local DamageTypes={[1]="Slashing", [2]="Piercing", [4]="Bludgeoning",[8]="Cold",[16]="Fire",[32]="Acid",[64]="Electric",[128]="Health",[256]="Stamina",[512]="Mana",[1024]="Nether",[2048]="Base"}
+  local DamageTypes={[1]="Slashing", [2]="Piercing", [4]="Bludgeoning",[8]="Cold",[16]="Fire",[32]="Acid",[64]="Electric",[128]="Health",[256]="Stamina",[512]="Mana",[1024]="Nether",[2048]="Base",[268435456]="Prismatic"}
   for maskIndex,typeString in pairs(DamageTypes) do
-    if bit.band(dmgTypeMask,maskIndex)>0 then
+    if dmgTypeMask==maskIndex then
+      return ", " ..typeString
+    elseif bit.band(dmgTypeMask,maskIndex)>0 then
       dest = dest .. (#dest>2 and "/" or "") .. typeString
     end
   end
@@ -800,7 +894,9 @@ function ItemExamine:ShowWeaponAndArmorData()
           }
           rhs = map[oldSkill] or ""
         end
-        self:Add("Skill: " .. tostring( weaponSkillId + SkillId.Undef ):gsub("(%l)(%u)", "%1 %2") .. rhs)
+        if weaponSkillId~=0 then
+          self:Add("Skill: " .. tostring( weaponSkillId + SkillId.Undef ):gsub("(%l)(%u)", "%1 %2") .. rhs)
+        end
       end
       
       -- Damage
@@ -833,7 +929,7 @@ function ItemExamine:ShowWeaponAndArmorData()
           else
             ability_txt = string.format("%s%d%s", damageTxt, weaponDamage, dest)
           end
-          self:Add(ability_txt,bit.band(self.item.IntValues["WeapHighlight"] or 0,WeaponHighlightMask.Damage.ToNumber())>0 and 
+          self:Add(ability_txt, bit.band(self.item.IntValues["WeapHighlight"] or 0,WeaponHighlightMask.Damage.ToNumber())>0 and 
                               (bit.band(self.item.IntValues["WeapColor"] or 0,WeaponHighlightMask.Damage.ToNumber())>0 and
                               imguiGreen or imguiRed) or nil)
         end
@@ -841,7 +937,7 @@ function ItemExamine:ShowWeaponAndArmorData()
       
       local _, elemBonus = InqInt(self.item, IntId.ElementalDamageBonus)
       if elemBonus > 0 then
-        self:Add(string.format("Elemental Damage Bonus: %d, %s.", elemBonus, damageMaskToString(damageType)))
+        self:Add(string.format("Elemental Damage Bonus: %d%s.", elemBonus, damageMaskToString(damageType)))
       end
       
       if IsMissile then
@@ -1095,13 +1191,14 @@ function ItemExamine:ShowSpecialProperties()
   if imbuedCheck ~= 0 then
     self:Add("This item cannot be further imbued.")
   end
+  self:Add("")
   
   local okAuto, autoLeft = InqBool(self.item, BoolId.AutowieldLeft)
   if okAuto and autoLeft then
     self:Add("This item is tethered to the left side.")
     self:Add("")
   elseif imbuedCheck ~= 0 then
-    self:Add("")
+    --self:Add("")
   end
 end
 
@@ -1290,6 +1387,7 @@ function ItemExamine:ShowItemLevelInfo()
     self:Add(string.format("Item Level: %d / %d", level, maxLevel))
     self:Add("Item XP: "..format_int(itemXp) .. "/" .. format_int(nextXp))
     self:Add("")
+    self:Add("")    
   end
   
   local okCloak, cloakProc = InqInt(self.item, IntId.CloakWeaveProc)
@@ -1314,7 +1412,7 @@ function ItemExamine:ShowActivationRequirements()
   end
   
   local okSkillLim, skillLimit = InqInt(self.item, IntId.ItemSkillLevelLimit)
-  local okAttr2, attr2        = InqInt(self.item, IntId.WieldSkilltype)
+  local okAttr2, attr2        = InqInt(self.item, IntId.AppraisalItemSkill)
   if okSkillLim and skillLimit > 0 and okAttr2 then
     local name = InqSkillName(attr2)
     if name ~= "" then table.insert(parts, name:gsub("(%l)(%u)", "%1 %2") .. " " .. skillLimit) end
@@ -1481,7 +1579,9 @@ end
 function ItemExamine:ShowRareInfo()
   local okT, timer = InqBool(self.item, BoolId.RareUsesTimer)
   if okT and timer then
+    self:Add("")
     self:Add("This rare item has a timer restriction of 3 minutes. You will not be able to use another rare item with a timer within 3 minutes of using this one.")
+    self:Add("")
   end
   local okR, rareId = InqInt(self.item, IntId.RareId)
   if okR then
@@ -1530,18 +1630,51 @@ function ItemExamine:ShowDescription()
   if okLife and life > 0 then
     self:Add("This item expires in " .. DeltaTimeToString(life))
   end
-  
+
   local okLong, desc = InqString(self.item, StringId.LongDesc)
   if not okLong or desc == "" then
     local okShort, short = InqString(self.item, StringId.ShortDesc)
     desc = okShort and short or ""
+  else
+    local mat  = self.item.IntValues["MaterialType"]
+    local work = self.item.IntValues["ItemWorkmanship"]
+    if mat and work then
+      local itemName = desc
+      local prependMaterial    = StringToMaterialType[mat] or ""
+      local wi                 = math.max(1, math.min(work, 10))
+      local craftLabels = {
+        "Poorly crafted","Well-crafted","Finely crafted","Exquisitely crafted",
+        "Magnificent","Nearly flawless","Flawless","Utterly flawless","Incomparable","Priceless"
+      }
+      local prependWorkmanship = craftLabels[wi] or ""
+      local gemType  = self.item.IntValues["GemType"]
+      local gemCount = self.item.IntValues["GemCount"]
+
+      if gemType and gemCount and gemCount >= 1 then
+        local modifiedGemType = StringToMaterialType[gemType] or ""
+        if gemCount > 1 then
+          if gemType==26 or gemType==37 or gemType==40 or gemType==46 or gemType==49 then
+            modifiedGemType = modifiedGemType .. "es"
+          elseif gemType == 38 then
+            modifiedGemType = "Rubies"
+          else
+            modifiedGemType = modifiedGemType .. "s"
+          end
+        end
+        desc = string.format("%s %s %s, set with %d %s",
+          prependWorkmanship, prependMaterial, itemName, gemCount, modifiedGemType)
+      else
+        desc = string.format("%s %s %s",
+          prependWorkmanship, prependMaterial, itemName)
+      end
+    end
   end
-  
+
   if desc ~= "" then
     self:Add("")
     self:Add(desc)
   end
-  
+
   local okB, bitfield = InqInt(self.item, IntId.PortalBitmask)
   if okB and bitfield ~= 0 then
     local lines = {}
@@ -1555,10 +1688,177 @@ function ItemExamine:ShowDescription()
       for _, l in ipairs(lines) do self:Add(l) end
     end
   end
-  
+
   local okCost, cost = InqInt64(self.item, Int64Id.AugmentationCost)
   if okCost and cost > 0 then
     self:Add(string.format("Using this gem will drain %d points of your available experience.", cost))
+  end
+end
+
+--------------------
+---creature profile
+--------------------
+function ItemExamine:ShowCreatureHeader()
+  local genderStr = ""
+  local allegianceTitle = ""
+  local okCT, creatureType = InqInt(self.item, IntId.CreatureType)
+  local hg
+  if okCT and creatureType == 31 then
+    local okGen, gender = InqInt(self.item, IntId.Gender)
+    if okGen then genderStr = ({"Male ","Female "})[gender] end
+    local okHer, heritage = InqInt(self.item, IntId.HeritageGroup)
+    if okHer then
+      local okHG, hgName = InqHeritageGroupDisplayName(heritage)
+      if okHG and hgName ~= "" then
+        hg = hgName
+        local okAt,at = InqInt(self.item, IntId.AllegianceRank)
+        if okAt then
+          ---@diagnostic disable-next-line
+          allegianceTitle = AllegianceTitle.GetTitle(hgName, genderStr, at)
+        end
+      end
+    end
+  end
+
+  local _, name = InqString(self.item, StringId.Name)
+  self:Add(allegianceTitle .. " " .. name, "", {centered=true, underline=true})
+
+  local textTableByCol = {[1]={}, [2]={}}
+  if okCT and creatureType == 31 then
+    table.insert(textTableByCol[1], {text=genderStr .. (hg or ""),mods={centered=true}})
+    table.insert(textTableByCol[1], {text=self.item.StringValues["Template"] or "",mods={centered=true}})
+    local okPvp, pvp = InqInt(self.item, IntId.PlayerKillerStatus)
+    if okPvp and PlayerKillerStatus.PK == pvp then
+      table.insert(textTableByCol[1], {text="Player Killer", mods={centered=true}})
+    elseif okPvp and PlayerKillerStatus.PKLite == pvp then
+      table.insert(textTableByCol[1], {text="Player Killer Lite", mods={centered=true}})
+    else
+      table.insert(textTableByCol[1], {text="Non-Player Killer", mods={centered=true}})
+    end
+  else
+    local ctName = okCT and InqCreatureDisplayName(creatureType) or ""
+    table.insert(textTableByCol[1], "")
+    table.insert(textTableByCol[1], {text=ctName, mods={centered=true}})
+    table.insert(textTableByCol[1], "")
+  end
+
+  table.insert(textTableByCol[2], {text="Character", mods={centered=true}})
+  table.insert(textTableByCol[2], {text="Level",     mods={centered=true}})
+  local okLevel, level = InqInt(self.item, IntId.Level)
+  table.insert(textTableByCol[2], {text=okLevel and tostring(level) or "???", mods={centered=true}})
+
+  self:AddTable(textTableByCol)
+  self:Add("$IMGUI_SEPARATOR")
+end
+
+function ItemExamine:ShowCreatureAttributes()
+  local crp = self.item.CreatureProfile
+  local function col(mask)
+    return bit.band(crp.AttrHighlight.ToNumber(), mask) > 0
+       and (bit.band(crp.AttrColor.ToNumber(), mask) > 0 and imguiGreen or imguiRed)
+       or nil
+  end
+  local A = AttributeMask
+  local textTableByCol = {[1]={}, [2]={}}
+  local attrs = {
+    {"Strength",     A.Strength.ToNumber(),      tostring(crp.Strength)},
+    {"Endurance",    A.Endurance.ToNumber(),     tostring(crp.Endurance)},
+    {"Coordination", A.Coordination.ToNumber(),  tostring(crp.Coordination)},
+    {"Quickness",    A.Quickness.ToNumber(),     tostring(crp.Quickness)},
+    {"Focus",        A.Focus.ToNumber(),         tostring(crp.Focus)},
+    {"Self",         A.Self.ToNumber(),          tostring(crp.Self)},
+    {"Health",       A.Health.ToNumber(),        string.format("%d/%d (%d%%%%)",
+                                                   crp.Health, crp.HealthMax,
+                                                   math.floor(crp.Health/crp.HealthMax*100+0.5))},
+    {"Stamina",      A.Stamina.ToNumber(),       crp.Stamina .."/".. crp.StaminaMax},
+    {"Mana",         A.Mana.ToNumber(),          crp.Mana    .."/".. crp.ManaMax},
+  }
+  for _, a in ipairs(attrs) do
+    local c = col(a[2])
+    table.insert(textTableByCol[1], {text=a[1], color=c})
+    table.insert(textTableByCol[2], {text=a[3]=="0" and "???" or a[3], color=c, mods={rightAlign=true}})
+  end
+  self:AddTable(textTableByCol)
+  self:Add("$IMGUI_SEPARATOR")
+end
+
+function ItemExamine:ShowCreatureAllegiance()
+  local okCT, creatureType = InqInt(self.item, IntId.CreatureType)
+  if not okCT or creatureType ~= 31 then return end
+
+  if self.item.StringValues["AllegianceName"] then
+    self:Add(self.item.StringValues["AllegianceName"], "", {centered=true})
+  end
+
+  local textTableByCol = {[1]={}, [2]={}}
+  local societyStr = ""
+  local okS, ribbons = InqInt(self.item, IntId.SocietyRankCelhan)
+  if okS then
+    societyStr = "Celestial Hand ~ " .. GetSocietyRank(ribbons)
+  end
+  okS, ribbons = InqInt(self.item, IntId.SocietyRankEldweb)
+  if okS then
+    societyStr = "Eldrytch Web ~ " .. GetSocietyRank(ribbons)
+  end
+  okS, ribbons = InqInt(self.item, IntId.SocietyRankRadblo)
+  if okS then
+    societyStr = "Celestial Hand ~ " .. GetSocietyRank(ribbons)
+  end
+  if societyStr ~= "" then
+    table.insert(textTableByCol[1], "Society:")
+    table.insert(textTableByCol[2], {text=societyStr, mods={rightAlign=true}})
+  end
+
+  if self.item.StringValues["MonarchsTitle"] then
+    if self.item.StringValues["PatronsTitle"] == self.item.StringValues["MonarchsTitle"] then
+      table.insert(textTableByCol[1], "Monarch/Patron:")
+      table.insert(textTableByCol[2], {text=self.item.StringValues["MonarchsTitle"], mods={rightAlign=true}})
+    else
+      table.insert(textTableByCol[1], "Monarch:")
+      table.insert(textTableByCol[2], {text=self.item.StringValues["MonarchsTitle"], mods={rightAlign=true}})
+      table.insert(textTableByCol[1], "Patron:")
+      table.insert(textTableByCol[2], {text=self.item.StringValues["PatronsTitle"], mods={rightAlign=true}})
+    end
+  end
+  self:AddTable(textTableByCol)
+  self:Add("")
+end
+
+function ItemExamine:ShowCreatureArmor()
+  local okCT, creatureType = InqInt(self.item, IntId.CreatureType)
+  if not okCT or creatureType ~= 31 then return end
+
+  local textTableByCol = {[1]={}, [2]={}}
+  table.insert(textTableByCol[1], "Head/Chest/Groin")
+  table.insert(textTableByCol[2], "AL: "..self.item.BaseArmorHead  .."/"..self.item.BaseArmorChest .."/"..self.item.BaseArmorGroin)
+  table.insert(textTableByCol[1], "Bicep/Wrist/Hand")
+  table.insert(textTableByCol[2], "AL: "..self.item.BaseArmorBicep .."/"..self.item.BaseArmorWrist .."/"..self.item.BaseArmorHand)
+  table.insert(textTableByCol[1], "Thigh/Shin/Foot")
+  table.insert(textTableByCol[2], "AL: "..self.item.BaseArmorThigh .."/"..self.item.BaseArmorShin  .."/"..self.item.BaseArmorFoot)
+  self:AddTable(textTableByCol)
+  self:Add("")
+end
+
+function ItemExamine:ShowCreatureRatings()
+  local okCT, creatureType = InqInt(self.item, IntId.CreatureType)
+  if not okCT or creatureType ~= 31 then return end
+
+  local _, dam     = InqInt(self.item, IntId.DamageRating)
+  local _, damRes  = InqInt(self.item, IntId.DamageResistRating)
+  local _, critDam = InqInt(self.item, IntId.CritDamageRating)
+  local _, critRes = InqInt(self.item, IntId.CritDamageResistRating)
+
+  local textTableByCol = {[1]={}, [2]={}}
+  if dam > 0 or critDam > 0 then
+    table.insert(textTableByCol[1], "Dam/CritDmg")
+    table.insert(textTableByCol[2], {text="Rating: "..dam.."/"..critDam,mods={rightAlign=true}})
+  end
+  if damRes > 0 or critRes > 0 then
+    table.insert(textTableByCol[1], "DamRes/CritDmgRes")
+    table.insert(textTableByCol[2], {text="Rating: "..damRes.."/"..critRes,mods={rightAlign=true}})
+  end
+  if #textTableByCol[1] > 0 then
+    self:AddTable(textTableByCol)
   end
 end
 
