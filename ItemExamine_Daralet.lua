@@ -84,6 +84,11 @@ function ItemExamine_Daralet.new(itemData)
   self.equippedItems = {}
   self.lines = {}
 
+  -- Compare-mode infrastructure: keyed comparable properties.
+  -- ItemExamine.new() merges these into self.byKey after calling serverLogic.new().
+  self.byKey    = {}
+  self._keyOrder = 0
+
   if self.item.StringValues["Use"] and not self.item.StringValues["Use"]:match("Quality Level:") and (self.item.StringValues["Use"]:match(":") or self.item.StringValues["Use"]:match("\t"))  then
     self.item.StringValues.Use = nil
   end
@@ -243,6 +248,27 @@ function ItemExamine_Daralet.new(itemData)
   return self
 end
 
+----------------------------------------------------------------------
+-- Compare-mode: register a property for cross-item diffing.
+-- propKey  : stable string key matching HIGHER_IS_BETTER / LOWER_IS_BETTER in ItemExamine
+-- label    : short display name shown in compare panel
+-- propVal  : raw numeric value to diff against the other item
+-- Silently skips nil / zero values and duplicate keys.
+----------------------------------------------------------------------
+function ItemExamine_Daralet:RegisterProp(propKey, label, propVal)
+  if propVal == nil or propVal == 0 or propVal == 0.0 then return end
+  if self.byKey[propKey] then return end
+  self.byKey[propKey] = {
+    text    = "",   -- invisible in text/tooltip mode; only used by Compare()
+    label   = label,
+    propVal = propVal,
+    propKey = propKey,
+    mods    = {},
+    _order  = self._keyOrder,
+  }
+  self._keyOrder = self._keyOrder + 1
+end
+
 function ItemExamine_Daralet:SetTrophyQualityLevelText()
   local trophyQuality = self.item.IntValues["TrophyQuality"]
   if not trophyQuality or trophyQuality <= 0 then return end
@@ -341,6 +367,7 @@ function ItemExamine_Daralet:SetSigilTrinketUseText()
     self._extraPropertiesText = (self._extraPropertiesText or "") ..
       string.format("Proc Chance: %.0f%%%%\n", math.floor(triggerChance * 100 + 0.5))
     self._hasExtraPropertiesText = true
+    self:RegisterProp("SigilTrinketTriggerChance", "Proc Chance", triggerChance)
   end
 
   local cooldown = s.FloatValues["CooldownDuration"]
@@ -348,6 +375,7 @@ function ItemExamine_Daralet:SetSigilTrinketUseText()
     self._extraPropertiesText = self._extraPropertiesText ..
       string.format("Cooldown: %.1f seconds\n", cooldown)
     self._hasExtraPropertiesText = true
+    self:RegisterProp("SigilCooldown", "Cooldown", cooldown)
   end
 
   local maxStructure = s.IntValues["MaxStructure"]
@@ -355,6 +383,7 @@ function ItemExamine_Daralet:SetSigilTrinketUseText()
     self._extraPropertiesText = self._extraPropertiesText ..
       string.format("Max Number of Uses: %d\n", maxStructure)
     self._hasExtraPropertiesText = true
+    self:RegisterProp("SigilMaxUses", "Max Uses", maxStructure)
   end
 
   local intensity = s.FloatValues["SigilTrinketIntensity"]
@@ -362,6 +391,7 @@ function ItemExamine_Daralet:SetSigilTrinketUseText()
     self._extraPropertiesText = self._extraPropertiesText ..
       string.format("Bonus Intensity: %.1f%%%%\n", intensity * 100)
     self._hasExtraPropertiesText = true
+    self:RegisterProp("SigilTrinketIntensity", "Bonus Intensity", intensity)
   end
 
   local reduction = s.FloatValues["SigilTrinketReductionAmount"]
@@ -369,6 +399,7 @@ function ItemExamine_Daralet:SetSigilTrinketUseText()
     self._extraPropertiesText = self._extraPropertiesText ..
       string.format("Mana Cost Reduction: %.1f%%%%\n", reduction * 100)
     self._hasExtraPropertiesText = true
+    self:RegisterProp("SigilTrinketReductionAmount", "Mana Cost Reduction", reduction)
   end
 
   local aetherMask = EquipMask.RedAetheria.ToNumber() + EquipMask.YellowAetheria.ToNumber() + EquipMask.BlueAetheria.ToNumber()
@@ -390,6 +421,7 @@ function ItemExamine_Daralet:SetSigilTrinketUseText()
         string.format("Health Reservation: %.1f%%%%\n", healthRes * 100)
     end
     self._hasExtraPropertiesText = true
+    self:RegisterProp("SigilHealthReserved", "Health Reservation", healthRes)
   end
 
   local stamRes = s.FloatValues["SigilTrinketStaminaReserved"]
@@ -408,6 +440,7 @@ function ItemExamine_Daralet:SetSigilTrinketUseText()
         string.format("Stamina Reservation: %.1f%%%%\n", stamRes * 100)
     end
     self._hasExtraPropertiesText = true
+    self:RegisterProp("SigilStaminaReserved", "Stamina Reservation", stamRes)
   end
 
   local manaRes = s.FloatValues["SigilTrinketManaReserved"]
@@ -426,6 +459,7 @@ function ItemExamine_Daralet:SetSigilTrinketUseText()
         string.format("Mana Reservation: %.1f%%%%\n", manaRes * 100)
     end
     self._hasExtraPropertiesText = true
+    self:RegisterProp("SigilManaReserved", "Mana Reservation", manaRes)
   end
 
   if s.AllowedSpecializedSkills then
@@ -756,6 +790,7 @@ function ItemExamine_Daralet:SetDamagePenaltyUseText()
   self._extraPropertiesText = (self._extraPropertiesText or "") ..
     string.format("Damage Penalty: %d%%\n", dr)
   self._hasExtraPropertiesText = true
+  self:RegisterProp("DamagePenalty", "Damage Penalty", dr)  -- negative; LOWER_IS_BETTER in ItemExamine
 end
 
 function ItemExamine_Daralet:GetEquippedItemsSkillModSum(skillMod)
@@ -764,6 +799,9 @@ function ItemExamine_Daralet:GetEquippedItemsSkillModSum(skillMod)
   return 0
 end
 
+-- SetArmorModUseText: writes the display text AND registers a comparable prop.
+-- propKey  = floatString (e.g. "ArmorWarMagicMod")
+-- label    = extracted from the text template (e.g. "War Magic Skill")
 function ItemExamine_Daralet:SetArmorModUseText(floatString, floatVal, text, totalMod, multiplierOne, multiplierTwo)
   multiplierOne = multiplierOne or 100.0
   multiplierTwo = multiplierTwo or 100.0
@@ -777,6 +815,9 @@ function ItemExamine_Daralet:SetArmorModUseText(floatString, floatVal, text, tot
   end
   self._extraPropertiesText = (self._extraPropertiesText or "") .. finalText .. "\n"
   self._hasExtraPropertiesText = true
+  -- derive a clean label: "Bonus to War Magic Skill: +(ONE)%%" -> "War Magic Skill"
+  local label = text:match("Bonus to (.-)%s*:") or floatString
+  self:RegisterProp(floatString, label, floatVal)
 end
 
 function ItemExamine_Daralet:SetJewelryManaConUseText()
@@ -789,6 +830,7 @@ function ItemExamine_Daralet:SetJewelryManaConUseText()
       string.format("Bonus to Mana Conversion Skill: +%.1f%%%%\n", v * 100)
   end
   self._hasExtraPropertiesText = true
+  self:RegisterProp("ManaConversionMod_Jewelry", "Mana Conversion Bonus", v)
 end
 
 function ItemExamine_Daralet:SetArmorResourcePenaltyUseText()
@@ -804,6 +846,7 @@ function ItemExamine_Daralet:SetArmorResourcePenaltyUseText()
       string.format("Penalty to Stamina/Mana usage: %.1f%%%%\n", v * 100)
   end
   self._hasExtraPropertiesText = true
+  self:RegisterProp("ArmorResourcePenalty", "Stamina/Mana Penalty", v)  -- LOWER_IS_BETTER
 end
 
 function ItemExamine_Daralet:SetArmorWardLevelUseText()
@@ -818,6 +861,7 @@ function ItemExamine_Daralet:SetArmorWardLevelUseText()
       string.format("Ward Level: %d\n", wl)
   end
   self._hasExtraPropertiesText = true
+  self:RegisterProp("WardLevel", "Ward Level", wl)
 end
 
 local ArmorWeightClass = { None=0, Cloth=1, Light=2, Heavy=4 }
@@ -857,6 +901,7 @@ function ItemExamine_Daralet:SetWeaponRestoModUseText()
   self._extraPropertiesText = (self._extraPropertiesText or "") ..
     string.format("Healing Bonus for Restoration Spells: +%.1f%%%%\n", (v - 1) * 100)
   self._hasExtraPropertiesText = true
+  self:RegisterProp("WeaponRestorationSpellsMod", "Healing Bonus (Spells)", v)
 end
 
 function ItemExamine_Daralet:SetWeaponMagicDefenseUseText()
@@ -865,6 +910,7 @@ function ItemExamine_Daralet:SetWeaponMagicDefenseUseText()
   self._extraPropertiesText = (self._extraPropertiesText or "") ..
     string.format("Bonus to Magic Defense: +%.1f%%%%\n", (v - 1) * 100)
   self._hasExtraPropertiesText = true
+  self:RegisterProp("WeaponMagicalDefense", "Magic Defense Bonus (Weapon)", v)
 end
 
 function ItemExamine_Daralet:SetWeaponPhysicalDefenseUseText()
@@ -873,6 +919,7 @@ function ItemExamine_Daralet:SetWeaponPhysicalDefenseUseText()
   self._extraPropertiesText = (self._extraPropertiesText or "") ..
     string.format("Bonus to Physical Defense: +%.1f%%%%\n", (v - 1) * 100)
   self._hasExtraPropertiesText = true
+  self:RegisterProp("WeaponPhysicalDefense", "Physical Defense Bonus (Weapon)", v)
 end
 
 function ItemExamine_Daralet:SetWeaponLifeMagicUseText()
@@ -881,6 +928,7 @@ function ItemExamine_Daralet:SetWeaponLifeMagicUseText()
   self._extraPropertiesText = (self._extraPropertiesText or "") ..
     string.format("Bonus to Life Magic Skill: +%.1f%%%%\n", v * 100)
   self._hasExtraPropertiesText = true
+  self:RegisterProp("WeaponLifeMagicMod", "Life Magic Bonus (Weapon)", v)
 end
 
 function ItemExamine_Daralet:SetWeaponWarMagicUseText()
@@ -889,6 +937,7 @@ function ItemExamine_Daralet:SetWeaponWarMagicUseText()
   self._extraPropertiesText = (self._extraPropertiesText or "") ..
     string.format("Bonus to War Magic Skill: +%.1f%%%%\n", v * 100)
   self._hasExtraPropertiesText = true
+  self:RegisterProp("WeaponWarMagicMod", "War Magic Bonus (Weapon)", v)
 end
 
 function ItemExamine_Daralet:SetBowAttackModUseText()
@@ -898,6 +947,7 @@ function ItemExamine_Daralet:SetBowAttackModUseText()
   if ws == SkillId.Bow or ws == SkillId.Crossbow or ws == SkillId.MissleWeapons then
     self._extraPropertiesText = (self._extraPropertiesText or "") ..
       string.format("Bonus to Attack Skill: +%.1f%%%%\n", (v - 1) * 100)
+    self:RegisterProp("WeaponOffense_Bow", "Attack Bonus (Bow)", v)
   end
   self._hasExtraPropertiesText = true
 end
@@ -927,6 +977,7 @@ function ItemExamine_Daralet:SetSpellProcRateUseText()
   self._extraPropertiesText = (self._extraPropertiesText or "") ..
     string.format("Cast on strike chance: %.1f%%%%\n", v * 100)
   self._hasExtraPropertiesText = true
+  self:RegisterProp("ProcSpellRate", "Cast on Strike Chance", v)
 end
 
 function ItemExamine_Daralet:SetAdditionalPropertiesUseText()
@@ -1144,6 +1195,7 @@ function ItemExamine_Daralet:GetJewelRating(intStringName)
   return total
 end
 
+-- SetGearRatingText: builds display text AND registers a comparable prop for the rating total.
 function ItemExamine_Daralet:SetGearRatingText(intStringName, intVal, name, description, multiplierOne, multiplierTwo, baseOne, baseTwo, percent)
   multiplierOne = multiplierOne or 1.0
   multiplierTwo = multiplierTwo or 1.0
@@ -1158,6 +1210,9 @@ function ItemExamine_Daralet:SetGearRatingText(intStringName, intVal, name, desc
 
   table.insert(self._additionalPropertiesList, string.format("%s %s", name, tostring(total)))
   self._hasAdditionalProperties = true
+
+  -- register for compare mode using the item's own rating (not the equipped total)
+  self:RegisterProp(intStringName, name, itemRating > 0 and itemRating or total)
 
   local allEquipped  = self:GetEquippedAndActivatedItemRatingSum("IntValues", intStringName)
   local percentSign  = percent and "%%%%" or ""
@@ -1289,5 +1344,46 @@ function ItemExamine_Daralet:GetRatingFromJewel(propertyString, equipMask, jewel
   end
   return jewelQuality
 end
+
+ItemExamine_Daralet.HIGHER_IS_BETTER = {
+  GearStrength=true, GearEndurance=true, GearCoordination=true, GearQuickness=true,
+  GearFocus=true, GearSelf=true,
+  GearDamage=true, GearDamageResist=true, GearCrit=true, GearCritResist=true,
+  GearCritDamage=true, GearCritDamageResist=true, GearHealingBoost=true, GearMaxHealth=true,
+  GearMaxStamina=true, GearMaxMana=true,
+  GearPKDamageRating=true, GearPKDamageResistRating=true,
+  GearThreatReduction=true, GearElementalWard=true, GearPhysicalWard=true,
+  GearMagicFind=true, GearBlock=true, GearItemManaUsage=true, GearLifesteal=true,
+  GearThorns=true, GearVitalsTransfer=true, GearRedFury=true, GearYellowFury=true,
+  GearBlueFury=true, GearSelflessness=true, GearFamiliarity=true, GearBravado=true,
+  GearHealthToStamina=true, GearHealthToMana=true, GearExperienceGain=true,
+  GearManasteal=true, GearStaminasteal=true, GearBludgeon=true, GearPierce=true,
+  GearSlash=true, GearFire=true, GearFrost=true, GearAcid=true, GearLightning=true,
+  GearHealBubble=true, GearCompBurn=true, GearPyrealFind=true, GearNullification=true,
+  GearWardPen=true, GearHardenedDefense=true, GearReprisal=true, GearElementalist=true,
+  GearToughness=true, GearResistance=true, GearThreatGain=true, GearSelfHarm=true,
+  GearVipersStrike=true,
+  GearSlashBane=true, GearBludgeonBane=true, GearPierceBane=true,
+  GearAcidBane=true, GearFireBane=true, GearFrostBane=true, GearLightningBane=true,
+  WardLevel=true,
+  ArmorHealthRegenMod=true, ArmorStaminaRegenMod=true, ArmorManaRegenMod=true,
+  ArmorAttackMod=true, ArmorPhysicalDefMod=true, ArmorMissileDefMod=true, ArmorMagicDefMod=true,
+  ArmorRunMod=true, ArmorTwohandedCombatMod=true, ArmorDualWieldMod=true,
+  ArmorThieveryMod=true, ArmorPerceptionMod=true, ArmorShieldMod=true, ArmorDeceptionMod=true,
+  ArmorWarMagicMod=true, ArmorLifeMagicMod=true, ArmorHealthMod=true,
+  ArmorStaminaMod=true, ArmorManaMod=true,
+  WeaponWarMagicMod=true, WeaponLifeMagicMod=true,
+  WeaponPhysicalDefense=true, WeaponMagicalDefense=true,
+  WeaponRestorationSpellsMod=true, WeaponOffense_Bow=true,
+  ProcSpellRate=true, ManaConversionMod_Jewelry=true,
+  SigilTrinketTriggerChance=true, SigilTrinketIntensity=true,
+  SigilTrinketReductionAmount=true, SigilMaxUses=true,
+}
+
+ItemExamine_Daralet.LOWER_IS_BETTER = {
+  ArmorResourcePenalty=true, DamagePenalty=true,
+  SigilHealthReserved=true, SigilStaminaReserved=true, SigilManaReserved=true,
+  SigilCooldown=true,
+}
 
 return ItemExamine_Daralet
