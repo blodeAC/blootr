@@ -1923,4 +1923,3 @@ end)
 game.World.OnObjectSelected.Add(function(e)
   game.Actions.ObjectAppraise(e.ObjectId);
 end)
---function WeaponScorer.scoreWeenie(weenie, meta, tier, mutationsRoot, serverType, weights)
