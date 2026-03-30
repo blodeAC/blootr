@@ -419,6 +419,18 @@ M.armor = {
 
 M.magic = {
   {
+    label    = "RareId",
+    propType = "IntValues",   propKey   = "RareId",
+    widget   = "int",        ops      = {">=","<=","=="},
+    default  = 0,            categories = "*",
+  },
+  {
+    label    = "Uses Remaining",
+    propType = "IntValues",   propKey   = "Structure",
+    widget   = "int",        ops      = {">=","<=","=="},
+    default  = 1,            categories = "*",
+  },
+  {
     label    = "Spellcraft",
     propType = "IntValues",   propKey   = "ItemSpellcraft",
     widget   = "int",        ops      = {">=","<=",">","<","=="},
